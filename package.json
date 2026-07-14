@@ -8,6 +8,9 @@
     "cypress": "cypress open",
     "cypress-run": "cypress run",
     "cy:open": "cypress open",
+    "cy:smoke": "cypress run --spec \"cypress/e2e/smoke/**/*.cy.js\"",
+    "cy:regression": "cypress run --spec \"cypress/e2e/regression/**/*.cy.js\"",
+    "cy:nightly": "cypress run --spec \"cypress/e2e/nightly/**/*.cy.js\"",
     "cypress:run:chrome": "cypress run --browser chrome",
     "cypress:run:firefox": "cypress run --browser firefox",
     "cypress:run:headless": "cypress run --headless"
@@ -20,6 +23,13 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "cypress": "^13.0.0"
+    "@faker-js/faker": "^8.3.1",
+    "cypress": "^13.5.0",
+    "cypress-real-events": "^1.11.0",
+    "npm-run-all": "^4.1.5"
+  },
+  "dependencies": {
+    "cypress-browser-permissions": "^1.0.2",
+    "socket.io-client": "^4.7.2"
   }
 }
