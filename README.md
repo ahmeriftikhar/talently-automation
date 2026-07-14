@@ -18,7 +18,7 @@ npm install
 
 ### Open Cypress Test Runner (Interactive Mode)
 ```bash
-npm run cypress:open
+npm run cypress
 ```
 
 ### Run Tests Headless

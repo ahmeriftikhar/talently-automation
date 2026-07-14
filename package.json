@@ -4,8 +4,10 @@
   "description": "E2E automation testing with Cypress",
   "main": "index.js",
   "scripts": {
-    "cypress:open": "cypress open",
-    "cypress:run": "cypress run",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cypress": "cypress open",
+    "cypress-run": "cypress run",
+    "cy:open": "cypress open",
     "cypress:run:chrome": "cypress run --browser chrome",
     "cypress:run:firefox": "cypress run --browser firefox",
     "cypress:run:headless": "cypress run --headless"
