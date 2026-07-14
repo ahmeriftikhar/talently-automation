@@ -1,0 +1,14 @@
+{
+  "candidateUser": {
+    "name": "Test Candidate",
+    "email": "testcandidate@mailinator.com",
+    "country": "Pakistan",
+    "phone": "1234567890"
+  },
+  "candidateUser2": {
+    "name": "John Doe",
+    "email": "johndoe@mailinator.com",
+    "country": "United States",
+    "phone": "9876543210"
+  }
+}

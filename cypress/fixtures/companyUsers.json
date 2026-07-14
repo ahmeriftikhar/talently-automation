@@ -1,0 +1,17 @@
+{
+  "automationUser": {
+    "username": "UIAutomationUser",
+    "password": "Welcome18!",
+    "email": "uiautomationuser@automation.com"
+  },
+  "automationUserDev": {
+    "username": "UIAutomationUser",
+    "password": "Welcome18!",
+    "email": "remotebase115@mailinator.com"
+  },
+  "automationUserIncorrectCredentials": {
+    "username": "UIAutomationUser123",
+    "password": "Welcome18!abc",
+    "email": "uiautomationuser@automation.com"
+  }
+}

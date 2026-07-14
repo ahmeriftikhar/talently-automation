@@ -15,3 +15,10 @@
 
 // Import commands.js using ES2015 syntax:
 import './commands'
+import './commands/auth.commands'
+import './commands/job.commands'
+import './commands/candidate.commands'
+import './commands/workspace.commands'
+import './commands/env.commands'
+import './interviewCommands/interviewCommands'
+import './mockInterviewCommands/mockInterviewCommands'

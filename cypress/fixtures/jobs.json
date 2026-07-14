@@ -1,0 +1,26 @@
+{
+  "technicalJob": {
+    "title": "Senior Software Engineer",
+    "description": "We are looking for a Senior Software Engineer to join our team. The ideal candidate should have strong experience in modern web technologies, cloud services, and agile methodologies.",
+    "jobType": "Full-time",
+    "interviewType": "Technical",
+    "interviewDuration": "30 minutes",
+    "experience": "5"
+  },
+  "managerialJob": {
+    "title": "Product Manager",
+    "description": "We are seeking a Product Manager to lead our product development initiatives. The candidate should have experience in product lifecycle management, user research, and cross-functional team leadership.",
+    "jobType": "Full-time",
+    "interviewType": "Cultural",
+    "interviewDuration": "20 minutes",
+    "experience": "3"
+  },
+  "qaJob": {
+    "title": "QA Automation Engineer",
+    "description": "We need a QA Automation Engineer to design and implement automated testing solutions. Experience with Cypress, Selenium, and modern testing frameworks is required.",
+    "jobType": "Full-time",
+    "interviewType": "Technical and Cultural",
+    "interviewDuration": "40 minutes",
+    "experience": "4"
+  }
+}
