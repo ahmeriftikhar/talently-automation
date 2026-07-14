@@ -16,6 +16,33 @@ This document outlines the comprehensive automation plan for the Interview-AI pr
 - Missing Cypress configuration and test structure
 - Ready for E2E test implementation
 
+### Legacy Test-Automation-Talently Repository
+The old automation repository contains valuable components that can be reused:
+
+**Reusable Libraries:**
+- `@faker-js/faker` - Test data generation
+- `cypress-real-events` - Realistic user interactions
+- `cypress-browser-permissions` - Camera/microphone permission handling
+- `socket.io-client` - WebSocket testing for real-time features
+- `npm-run-all` - Parallel test execution
+
+**Reusable Patterns:**
+- Environment-based configuration (dev/staging/prod)
+- Modular command organization by feature
+- Centralized selector management
+- API intercept handling and waiting
+- Session storage management
+- Cookie consent handling
+- Inactivity modal handling
+- Custom logging with colored console output
+- Dynamic JSON file creation for test artifacts
+
+**Test Organization:**
+- Categorized test suites (smoke, regression, nightly)
+- Feature-based spec organization
+- Environment-specific test accounts
+- Parallel execution setup
+
 ## Automation Phases
 
 ### Phase 1: Foundation Setup
@@ -23,20 +50,28 @@ This document outlines the comprehensive automation plan for the Interview-AI pr
 #### 1.1 Cypress Configuration
 - Create `cypress.config.js` with proper settings:
   - baseUrl configuration (http://localhost:3000)
+  - baseSecUrl for backend API
   - Viewport settings (1280x720)
-  - Default command timeout (10s)
+  - Default command timeout (60s - increased from legacy project)
   - Request timeout (10s)
   - Video recording on failure
   - Screenshot capture on failure
+  - Custom screenshot folder for failed cases
 - Configure environment variables:
   - Development environment
   - Staging environment
   - Production environment
+  - Environment-specific URLs and credentials
 - Browser configurations:
   - Chrome (primary)
   - Firefox
   - Edge
+- Browser permissions setup:
+  - Camera/microphone permissions for interviews
+  - Use fake UI for media stream in testing
+  - Notifications, geolocation, and other permissions
 - Setup test isolation and database cleanup
+- Custom task for colored console logging
 
 #### 1.2 Project Structure
 ```
@@ -78,22 +113,48 @@ cypress/
 │       ├── job-api.cy.js
 │       └── candidate-api.cy.js
 ├── support/
-│   ├── commands.js
-│   ├── e2e.js
-│   └── index.js
+│   ├── commands.js (main commands file)
+│   ├── e2e.js (support file imports)
+│   ├── commands/
+│   │   ├── auth.commands.js
+│   │   ├── job.commands.js
+│   │   ├── candidate.commands.js
+│   │   ├── workspace.commands.js
+│   │   └── env.commands.js
+│   ├── authCommands/
+│   │   └── companyAuthCommands.js
+│   ├── createJobCommands/
+│   │   ├── createJobWithoutCustomizedQsCommands.js
+│   │   └── createJobWithCustomizedQsCommands.js
+│   ├── interviewCommands/
+│   │   ├── interviewCommands.js
+│   │   └── dynamicInterviewCommands.js
+│   ├── mockInterviewCommands/
+│   │   └── mockInterviewCommands.js
+│   ├── paymentCommands/
+│   │   └── paymentCommands.js
+│   ├── selectors/
+│   │   └── selectors.js (centralized selectors)
+│   └── registerCommands/
+│       └── registerCommands.js
 ├── fixtures/
-│   ├── users.json
+│   ├── companyUsers.json (test accounts)
+│   ├── userAccounts.json
 │   ├── jobs.json
 │   ├── interviews.json
-│   └── candidates.json
+│   ├── candidates.json
+│   └── interviewReports/ (dynamic report artifacts)
 ├── pages/
 │   ├── LoginPage.js
 │   ├── DashboardPage.js
 │   ├── InterviewPage.js
 │   ├── MockInterviewPage.js
 │   └── JobPage.js
-└── plugins/
-    └── index.js
+├── plugins/
+│   └── index.js
+├── failedCasesEvidence/ (screenshots on failure)
+├── reports/ (test reports)
+└── videos/ (test recordings)
 ```
 
 ### Phase 2: Test Data Management
@@ -152,9 +213,12 @@ cypress/
 cy.loginAsAdmin(credentials)
 cy.loginAsCompany(credentials)
 cy.loginAsCandidate(credentials)
+cy.login(email, password) // Basic login from legacy
 cy.logout()
 cy.checkSession()
 cy.resetSession()
+cy.handleCookieConsent() // Handle cookie consent modal
+cy.navigateToJobsPage() // Navigate from dashboard to jobs
 ```
 
 #### 3.2 Interview Commands
@@ -167,6 +231,11 @@ cy.skipQuestion()
 cy.requestHint()
 cy.checkInterviewStatus()
 cy.waitForInterviewReady()
+cy.registerUserAccForInterview(name, email, country, phone) // Register candidate
+cy.joinAndStartInterview() // Join and start interview flow
+cy.getQuestionFromBot(index) // Get question from AI bot
+cy.checkInactivityModalAndClickOnResumeBtn() // Handle inactivity modal
+cy.textToSpeech(message) // Text to speech for testing
 ```
 
 #### 3.3 Job Management Commands
@@ -176,6 +245,12 @@ cy.editJob(jobId, updates)
 cy.archiveJob(jobId)
 cy.duplicateJob(jobId)
 cy.publishJob(jobId)
+cy.openFixedJobCreation() // Open fixed questions job creation
+cy.fillBasicFixedJobDetails(data) // Fill basic job details
+cy.submitCurrentFooterStep(alias) // Submit current step with API intercept
+cy.publishCurrentJob() // Publish current job
+cy.extractPublishedInterviewLink() // Extract interview link from published job
+cy.generateJobDescription() // Generate random job description
 ```
 
 #### 3.4 Common Action Commands
@@ -188,6 +263,11 @@ cy.waitForApiCall(endpoint)
 cy.waitForElement(selector)
 cy.clickButton(buttonText)
 cy.verifyUrl(expectedUrl)
+cy.setSessionStorage(key, value) // Set session storage
+cy.getSessionStorage(key) // Get session storage
+cy.checkTextCommand(text) // Check if text is visible
+cy.createDynamicJSONFile(filePath, data) // Create JSON file for artifacts
+cy.task('logMessage', { message, style }) // Custom logging
 ```
 
 #### 3.5 API Testing Commands
@@ -196,6 +276,29 @@ cy.apiRequest(method, endpoint, data)
 cy.verifyApiResponse(expected)
 cy.checkApiStatusCode(expected)
 cy.verifyApiResponseSchema(schema)
+cy.requireTalentlyEnv(keys) // Validate required environment variables
+```
+
+#### 3.6 Mock Interview Commands (from legacy)
+```javascript
+cy.verifyStartPracticingForFreeBtn()
+cy.verifyBookADemoBtn()
+cy.verifymockInterviewJDFieldUnEditable()
+cy.verifymockInterviewDurationFieldUnEditable()
+cy.verifyCreateMyCustomInterviewBtn()
+cy.clickOnMockInterviewSubmitBtn()
+cy.clickOnCreateCustomMockInterviewBtn()
+cy.clickOnStartMockInterviewBtn()
+cy.waitForMockInterviewUpload()
+cy.checkValidationOnUserInfoPage()
+cy.clickOnStartPracticingForFreeBtn()
+cy.clickOnAllRoles()
+cy.enterUserDetailsForMockInterview(fName, email)
+cy.verifyCustomMockInterviewFields()
+cy.selectInterviewTimeMockInterview(time)
+cy.createCustomMockInterview(jobTitle, jobDescription, interviewTime)
+cy.completeDefaultMockInterviewProcess(companyID)
+cy.completeCustomMockInterviewProcess(companyID)
 ```
 
 ### Phase 4: E2E Test Coverage
@@ -472,6 +575,76 @@ cy.verifyApiResponseSchema(schema)
 3. Create test data fixtures (Phase 2)
 4. Implement custom commands (Phase 3)
 5. Start with critical path tests (Phase 4)
+
+## Reusable Components from Legacy Project
+
+### Directly Reusable Files (with consent)
+The following components from the old `test-automation-talently` repository can be adapted:
+
+**Configuration Files:**
+- `cypress.config.js` - Environment configuration, browser permissions, custom tasks
+- `cypress.env.example.json` - Environment variable template
+- `package.json` - Dependencies and scripts
+
+**Support Files:**
+- `cypress/support/selectors/selectors.js` - Centralized selector management
+- `cypress/support/commands/auth.commands.js` - Authentication commands
+- `cypress/support/commands/job.commands.js` - Job management commands
+- `cypress/support/commands/env.commands.js` - Environment validation
+- `cypress/support/commands/workspace.commands.js` - Workspace commands
+- `cypress/support/commands/candidate.commands.js` - Candidate commands
+
+**Command Modules:**
+- `cypress/support/companyAuthCommands/companyAuthCommands.js` - Company authentication
+- `cypress/support/createJobCommands/createJobWithoutCustomizedQsCommands.js` - Job creation
+- `cypress/support/createJobCommands/createJobWithCustomizedQsCommands.js` - Custom questions
+- `cypress/support/interviewCommands/interviewCommands.js` - Interview flow commands
+- `cypress/support/interviewCommands/dynamicInterviewCommands.js` - Dynamic interviews
+- `cypress/support/mockInterviewCommands/mockInterviewCommands.js` - Mock interview commands
+
+**Test Patterns:**
+- Test structure from `cypress/e2e/interviewSpec/` - Interview test patterns
+- Test structure from `cypress/e2e/mockInterviewSpec/` - Mock interview patterns
+- Test structure from `cypress/e2e/createJobSpec/` - Job creation patterns
+- API intercept patterns and waiting strategies
+- Session storage and cookie handling approaches
+
+### Adaptation Required
+These components will need updates to match:
+- Current interview-ai UI changes
+- New API endpoints
+- Updated selectors and locators
+- Current authentication flow
+- New features and functionality
+
+### Dependencies to Install
+```json
+{
+  "devDependencies": {
+    "@faker-js/faker": "^8.3.1",
+    "cypress": "^13.5.0",
+    "cypress-real-events": "^1.11.0",
+    "npm-run-all": "^4.1.5"
+  },
+  "dependencies": {
+    "cypress-browser-permissions": "^1.0.2",
+    "socket.io-client": "^4.7.2"
+  }
+}
+```
+
+### Scripts to Include
+```json
+{
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:smoke": "cypress run --spec \"cypress/e2e/smoke/**/*.cy.js\"",
+    "cy:regression": "cypress run --spec \"cypress/e2e/regression/**/*.cy.js\"",
+    "cy:nightly": "cypress run --spec \"cypress/e2e/nightly/**/*.cy.js\"",
+    "interviews:parallel": "npm-run-all --parallel interview1 interview2 interview3"
+  }
+}
+```
 
 ## Contact
 
