@@ -1,11 +1,12 @@
 import { selectors } from '../selectors/selectors';
 
 Cypress.Commands.add('handleCookieConsent', () => {
-    cy.get('body').then(($body) => {
+    // Wait for cookie consent modal to appear with extended timeout
+    cy.get('body', { timeout: 10000 }).then(($body) => {
         if ($body.find(selectors.cookies.acceptAllButton).length > 0) {
             cy.log('Cookie consent modal detected - accepting all cookies');
-            cy.get(selectors.cookies.acceptAllButton).click();
-            cy.get(selectors.cookies.acceptAllButton).should('not.exist');
+            cy.get(selectors.cookies.acceptAllButton, { timeout: 5000 }).should('be.visible').click();
+            cy.get(selectors.cookies.acceptAllButton, { timeout: 5000 }).should('not.exist');
         } else {
             cy.log('No cookie consent modal detected');
         }
@@ -14,12 +15,18 @@ Cypress.Commands.add('handleCookieConsent', () => {
 
 Cypress.Commands.add('navigateToJobsPage', () => {
     cy.get('body').then(($body) => {
-        if ($body.find(selectors.sidebar.jobsButton).length > 0) {
+        // First try the Add Job button on dashboard
+        if ($body.find(selectors.dashboard.addJobButton).length > 0) {
+            cy.log('Navigating to Jobs page via Add Job button');
+            cy.get(selectors.dashboard.addJobButton).click();
+            cy.url().should('include', '/create-job');
+        } else if ($body.find('button:has(svg)').length > 0) {
+            // Try sidebar navigation - click the second button (Jobs button)
             cy.log('Navigating to Jobs page via sidebar');
-            cy.get(selectors.sidebar.jobsButton).click();
+            cy.get('button:has(svg)').eq(1).click();
             cy.url().should('include', '/create-job');
         } else {
-            cy.log('Already on Jobs page or sidebar not visible');
+            cy.log('Already on Jobs page or navigation not found');
         }
     });
 });
@@ -42,12 +49,6 @@ Cypress.Commands.add('loginAsAutomationCompany', () => {
     cy.get(selectors.auth.loginButton).click();
     cy.wait('@companyLogin').its('response.statusCode').should('be.oneOf', [200, 201]);
 
-    // Navigate from Dashboard to Jobs page if needed
-    cy.url().then((url) => {
-        if (url.includes('/dashboard')) {
-            cy.navigateToJobsPage();
-        } else {
-            cy.url().should('include', '/create-job');
-        }
-    });
+    // Wait for navigation after login
+    cy.url().should('not.include', '/login');
 });

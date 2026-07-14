@@ -8,6 +8,8 @@ describe('Authentication Tests', () => {
     beforeEach(() => {
         cy.logEnvironmentInfo();
         cy.visit(loginUrl);
+        // Handle cookie consent if present
+        cy.handleCookieConsent();
         cy.task('logMessage', {
             message: `Visiting login page: ${loginUrl}`,
             style: 'green',
