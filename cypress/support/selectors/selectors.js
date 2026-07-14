@@ -11,15 +11,29 @@ export const selectors = {
         preferenceCenterButton: 'button:contains("Preference Center")',
     },
     sidebar: {
-        jobsButton: 'button[onclick*="create-job"], button:has(svg), button:has(.BagIcon)',
-        dashboardButton: 'button[onclick*="dashboard"]',
+        // Icon-based navigation buttons with tooltips
+        dashboardButton: 'button:has(svg):first', // HomeIcon - Dashboard
+        jobsButton: 'button:contains("Jobs"), button:has(svg):nth-of-type(2)', // BagIcon - Jobs
+        billingButton: 'button:contains("Billing"), button:has(svg):nth-of-type(3)', // MoneyAddIcon - Billing
+        exploreButton: 'button:contains("Explore"), button:has(svg):nth-of-type(4)', // DiscoverIcon - Explore
+        talentPoolButton: 'button:contains("Talent Pool"), button:has(svg):nth-of-type(5)', // PeopleGroupIcon - Talent Pool (conditional)
+        dataButton: 'button:contains("Data"), button:has(svg):nth-of-type(6)', // DataIcon - Data
+        integrationButton: 'button:contains("Integration"), button:has(svg):nth-of-type(7)', // IntegrationIcon - Integration
+        settingsButton: 'button:contains("Settings"), button:has(svg):nth-of-type(8)', // SettingsLightIcon - Settings
+        logoutButton: 'button:contains("Logout"), button:has(svg):nth-of-type(9)', // LogoutAltIcon - Logout
+    },
+    dashboard: {
+        addJobButton: 'button:contains("Add Job")',
+        workspaceName: 'h1.text-xl, h1.text-2xl',
+        workspaceAvatar: '.rounded-full',
+        statCards: '.bg-white.rounded-lg',
     },
     workspace: {
         switcher: '[data-cy="workspace-switcher"]',
         option: (name) => `[data-cy="workspace-option-${name}"]`,
     },
     jobs: {
-        addJobButton: '#click-add-job',
+        addJobButton: 'button:contains("Add Job")',
         fixedQuestionsOption: '[data-cy="create-fixed-job"]',
         dynamicQuestionsOption: '[data-cy="create-dynamic-job"]',
         jobTitleInput: '[name="title"]',
