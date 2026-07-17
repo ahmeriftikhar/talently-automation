@@ -3,7 +3,7 @@ import { selectors } from '../selectors/selectors';
 Cypress.Commands.add('handleCookieConsent', () => {
     // Wait for cookie consent modal to appear with extended timeout
     cy.get('body', { timeout: 10000 }).then(($body) => {
-        if ($body.find(selectors.cookies.acceptAllButton).length > 0) {
+        if ($body.find(selectors.cookies.acceptAllButton, { timeout: 10000 }).length > 0) {
             cy.log('Cookie consent modal detected - accepting all cookies');
             cy.get(selectors.cookies.acceptAllButton, { timeout: 5000 }).should('be.visible').click();
             cy.get(selectors.cookies.acceptAllButton, { timeout: 5000 }).should('not.exist');
