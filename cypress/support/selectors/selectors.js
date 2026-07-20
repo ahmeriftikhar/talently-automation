@@ -79,4 +79,17 @@ export const selectors = {
         joinNowButton: '#join-now-interview',
         startInterviewButton: '#start-interview-click-candidate',
     },
+    interview: {
+        conversationBox: '.overflow-hidden > .text-xs',
+        inactivityModal: '.modal-dialog',
+        resumeButton: 'button:contains("Resume Interview")',
+        continueButton: 'button:contains("Continue")',
+        terminationBox: '.fixed.inset-0',
+        terminationTimer: '.text-\\[18px\\]',
+        screenShareModal: '.modal-content',
+        counterDisplay: '.text-\\[48px\\]',
+        feedbackScreen: '.feedback-container',
+        completedMessage: 'Interview is completed',
+        readyMessage: 'Are you ready to begin?',
+    },
 };
