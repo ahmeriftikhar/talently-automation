@@ -1,4 +1,5 @@
 import { selectors } from '../selectors/selectors';
+import { faker } from '@faker-js/faker';
 
 const backendUrl = () => Cypress.env('backendBaseUrl') || Cypress.config('baseSecUrl');
 const frontendBaseUrl = () => Cypress.env('frontendBaseUrl') || Cypress.config('baseUrl');
@@ -153,13 +154,13 @@ Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId) => {
         style: 'blue',
     });
     
-    rr
+    return cy.request({
             callId: callId,
             question: formattedMessage,
             userId: userId
         },
-        timeout: 90000,
-    }).then((response) => {
+        {timeout: 90000},
+    ).then((response) => {
         if (response.status === 200) {
             const answer = response.body.answer || "I want to skip this question";
             cy.task('logMessage', {
@@ -253,9 +254,9 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
     const filename = `interviewReportWithoutJobCreation_${currentDate}_${currentTime}.json`;
     const filepath = `cypress/fixtures/interviewReports/${filename}`;
     
-    // Generate random user data
-    const randomName = `TestUser${Date.now()}`;
-    const randomEmail = `${randomName}@gmail.com`;
+    // Generate random user data with shorter names
+    const randomName = faker.person.firstName();
+    const randomEmail = faker.internet.email({ firstName: randomName }).toLowerCase();
     
     cy.task('logMessage', {
         message: `Starting interview without job creation for link: ${interviewLink}`,
@@ -353,35 +354,19 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                 
                                 // Get next question
                                 cy.getQuestionFromBot(questionIndex).then((question) => {
-                                    // Handle "Are you ready to begin?" message
-                                    if (question.toLowerCase().includes('ready') || question.toLowerCase().includes('begin')) {
-                                        cy.generateAnswer(callId, userId, question, jobId).then((answer) => {
-                                            cy.sendAnswer(sid, answer, callId, userId, randomName).then(() => {
-                                                // Update JSON
-                                                cy.readFile(filepath).then((data) => {
-                                                    data.questionsAndAnswers.push({ question, answer });
-                                                    cy.writeFile(filepath, data);
-                                                });
-                                                questionIndex++;
-                                                cy.wait(5000);
-                                                processQuestions();
+                                    // Generate answer for all questions
+                                    cy.generateAnswer(callId, userId, question, jobId).then((answer) => {
+                                        cy.sendAnswer(sid, answer, callId, userId, randomName).then(() => {
+                                            // Update JSON
+                                            cy.readFile(filepath).then((data) => {
+                                                data.questionsAndAnswers.push({ question, answer });
+                                                cy.writeFile(filepath, data);
                                             });
+                                            questionIndex++;
+                                            cy.wait(5000);
+                                            processQuestions();
                                         });
-                                    } else {
-                                        // Regular question
-                                        cy.generateAnswer(callId, userId, question, jobId).then((answer) => {
-                                            cy.sendAnswer(sid, answer, callId, userId, randomName).then(() => {
-                                                // Update JSON
-                                                cy.readFile(filepath).then((data) => {
-                                                    data.questionsAndAnswers.push({ question, answer });
-                                                    cy.writeFile(filepath, data);
-                                                });
-                                                questionIndex++;
-                                                cy.wait(5000);
-                                                processQuestions();
-                                            });
-                                        });
-                                    }
+                                    });
                                 });
                             });
                         };
