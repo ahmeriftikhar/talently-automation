@@ -146,40 +146,43 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
 });
 
 // Generate answer using API
-Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId) => {
+Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId, sid) => {
     const formattedMessage = question.replace(/\s+/g, ' ').trim();
     
     cy.task('logMessage', {
-        message: `Generating answer for: ${formattedMessage.substring(0, 50)}...`,
+        message: `Generating answer for: ${formattedMessage}...`,
         style: 'blue',
     });
     
     return cy.request({
+        method: 'POST',
+        url: generateAnswerEndpoint(jobId),
+        body: {
+            sid: sid,
             callId: callId,
             question: formattedMessage,
             userId: userId
         },
-        {timeout: 90000},
-    ).then((response) => {
+        timeout: 90000,
+    }).then((response) => {
         if (response.status === 200) {
             const answer = response.body.answer || "I want to skip this question";
             cy.task('logMessage', {
-                message: `Generated answer: ${answer.substring(0, 50)}...`,
+                message: `Generated answer: ${answer}`,
                 style: 'green',
-            });
-            return answer;
+            }).then(() => answer);
         } else {
+            const answer = response.body.answer || "I want to skip this question";
             cy.task('logMessage', {
                 message: 'Failed to generate answer, using fallback',
                 style: 'red',
-            });
-            return "I want to skip this question";
+            }).then(() => answer);
         }
     });
 });
 
 // Send answer using API
-Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName) => {
+Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, interviewDuration) => {
     const user_message_start_timestamp = new Date().toUTCString();
     
     const requestBody = {
@@ -189,13 +192,13 @@ Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName) => {
         userId: userId,
         userName: userName,
         interviewType: 'fixed',
-        interviewDuration: 'dynamic',
+        interviewDuration: parseInt(interviewDuration.split('-')[1], 10), // "20 - 30 minutes" → 30
         companyId: 'dynamic',
         user_message_start_timestamp: user_message_start_timestamp
     };
     
     cy.task('logMessage', {
-        message: `Sending answer: ${answer.substring(0, 50)}...`,
+        message: `Sending answer: ${answer}...`,
         style: 'blue',
     });
     
@@ -279,7 +282,7 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
         const companyId = interviewData.companyId;
         
         cy.task('logMessage', {
-            message: `Job Details - Title: ${jobTitle}, Type: ${interviewType}, Duration: ${interviewDuration}`,
+            message: `Job Details - Title: ${jobTitle}, Duration: ${interviewDuration}`,
             style: 'gray',
         });
         
@@ -355,8 +358,8 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                 // Get next question
                                 cy.getQuestionFromBot(questionIndex).then((question) => {
                                     // Generate answer for all questions
-                                    cy.generateAnswer(callId, userId, question, jobId).then((answer) => {
-                                        cy.sendAnswer(sid, answer, callId, userId, randomName).then(() => {
+                                    cy.generateAnswer(callId, userId, question, jobId, sid).then((answer) => {
+                                        cy.sendAnswer(sid, answer, callId, userId, randomName, interviewDuration).then(() => {
                                             // Update JSON
                                             cy.readFile(filepath).then((data) => {
                                                 data.questionsAndAnswers.push({ question, answer });
