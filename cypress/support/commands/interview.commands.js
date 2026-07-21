@@ -120,15 +120,14 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
     return cy.get('body').then(($body) => {
         // Try the nth-child approach first
         const childIndex = (questionIndex + 1) * 2 - 1;
-        if ($body.find(`:nth-child(${childIndex}) > .overflow-hidden > .text-xs`).length > 0) {
-            return cy.get(`:nth-child(${childIndex}) > .overflow-hidden > .text-xs`)
+        if ($body.find(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`).length > 0) {
+            return cy.get(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`)
                 .invoke('text')
                 .then((question) => {
                     cy.task('logMessage', {
                         message: `Question ${questionIndex + 1}: ${question}`,
                         style: 'gray',
-                    });
-                    return question.trim();
+                    }).then(() => question.trim());
                 });
         } else {
             // Fallback to getting all conversation elements and picking the right one
@@ -138,8 +137,7 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                     cy.task('logMessage', {
                         message: `Question ${questionIndex + 1}: ${question}`,
                         style: 'gray',
-                    });
-                    return question.trim();
+                    }).then(() => question.trim());
                 });
         }
     });
