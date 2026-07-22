@@ -2,6 +2,7 @@ import { selectors } from '../selectors/selectors';
 
 Cypress.Commands.add('handleCookieConsent', () => {
     // Wait for cookie consent modal to appear with extended timeout
+    cy.wait(3000);
     cy.get('body', { timeout: 10000 }).then(($body) => {
         if ($body.find(selectors.cookies.acceptAllButton, { timeout: 10000 }).length > 0) {
             cy.log('Cookie consent modal detected - accepting all cookies');
@@ -42,7 +43,7 @@ Cypress.Commands.add('loginAsAutomationCompany', () => {
     cy.visit(Cypress.config('loginUrl'));
 
     // Handle cookie consent if present
-    cy.handleCookieConsent();
+    cy.handleCookieConsent({timeout: 10000});
 
     cy.get(selectors.auth.emailInput).clear().type(email);
     cy.get(selectors.auth.passwordInput).clear().type(password, { log: false });
