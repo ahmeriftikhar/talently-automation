@@ -122,6 +122,15 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
             .invoke('text')
             .then((question) => {
                 const trimmedQuestion = question.trim();
+                const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
+                if (isCompletionMessage) {
+                    cy.log('1st if statement triggered in getQuestionFromBot for completion message');
+                    cy.log(isCompletionMessage);
+                    return cy.task('logMessage', {
+                        message: 'Completion message detected instead of a question',
+                        style: 'green',
+                    }).then(() => null);
+                }
                 cy.task('logMessage', {
                     message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
                     style: 'gray',
@@ -137,6 +146,15 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                     .invoke('text')
                     .then((question) => {
                         const trimmedQuestion = question.trim();
+                        const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
+                        if (isCompletionMessage) {
+                            cy.log('1st if statement in else block triggered in getQuestionFromBot for completion message');
+                            cy.log(isCompletionMessage);
+                            return cy.task('logMessage', {
+                                message: 'Completion message detected instead of a question',
+                                style: 'green',
+                            }).then(() => null);
+                        }
                         cy.task('logMessage', {
                             message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
                             style: 'gray',
@@ -179,6 +197,15 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                     .invoke('text')
                     .then((question) => {
                         const trimmedQuestion = question.trim();
+                        const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
+                        if (isCompletionMessage) {
+                            cy.log('else statement in else blocktriggered in getQuestionFromBot for completion message');
+                            cy.log(isCompletionMessage);
+                            return cy.task('logMessage', {
+                                message: 'Completion message detected instead of a question',
+                                style: 'green',
+                            }).then(() => null);
+                        }
                         cy.task('logMessage', {
                             message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
                             style: 'gray',
@@ -455,6 +482,10 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                 
                                 // Get next question (with built-in text stabilization)
                                 cy.getQuestionFromBot(questionIndex).then((question) => {
+                                    if (question === null) {
+                                        cy.task('logMessage', { message: 'Completion message received — stopping question loop', style: 'green' });
+                                        return; // skip generateAnswer/sendAnswer entirely
+                                    }
                                     // Generate answer for all questions
                                     cy.generateAnswer(callId, userId, question, jobId, sid).then((answer) => {
                                         cy.sendAnswer(sid, answer, callId, userId, randomName, interviewDuration).then(() => {
