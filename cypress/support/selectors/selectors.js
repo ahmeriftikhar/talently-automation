@@ -91,5 +91,6 @@ export const selectors = {
         feedbackScreen: '.feedback-container',
         completedMessage: 'Interview is completed',
         readyMessage: 'Are you ready to begin?',
+        botPanel: 'p:contains("Talently").parent().parent().border-4.border-\\[\\#00BBF9\\]', // Bot panel with speaking indicator
     },
 };

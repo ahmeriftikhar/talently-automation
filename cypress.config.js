@@ -87,6 +87,7 @@ module.exports = defineConfig({
                         green: '\x1b[32m',
                         blue: '\x1b[34m',
                         gray: '\x1b[90m',
+                        yellow: '\x1b[33m',
                     };
 
                     // Log the styled message in the terminal

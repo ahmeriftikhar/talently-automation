@@ -111,38 +111,113 @@ Cypress.Commands.add('handleTerminationBox', () => {
 });
 
 // Get question from conversation box
-Cypress.Commands.add('getQuestionFromBot', (questionIndex, previousQuestion = '') => {
+Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
     cy.handleInactivityModal();
     cy.handleTerminationBox();
-    
     // Wait for conversation box to be available using element-based wait
     cy.get(selectors.interview.conversationBox, { timeout: 15000 }).should('exist');
-    
-    // Try multiple selector approaches for conversation box
-    return cy.get('body').then(($body) => {
-        // Try the nth-child approach first
-        const childIndex = (questionIndex + 1) * 2 - 1;
-        if ($body.find(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`).length > 0) {
-            return cy.get(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`)
-                .invoke('text')
-                .then((question) => {
-                    cy.task('logMessage', {
-                        message: `Question ${questionIndex + 1}: ${question}`,
-                        style: 'gray',
-                    }).then(() => question.trim());
-                });
-        } else {
-            // Fallback to getting all conversation elements and picking the right one
-            return cy.get('.overflow-hidden > .text-xs').eq(questionIndex)
-                .invoke('text')
-                .then((question) => {
-                    cy.task('logMessage', {
-                        message: `Question ${questionIndex + 1}: ${question}`,
-                        style: 'gray',
-                    }).then(() => question.trim());
-                });
-        }
-    });
+    if (questionIndex == 0) { 
+        cy.wait(15000); // Wait for 15 seconds for the bot to finish speaking question
+        return cy.get(`:nth-child(1) > ${selectors.interview.conversationBox}`)
+            .invoke('text')
+            .then((question) => {
+                const trimmedQuestion = question.trim();
+                cy.task('logMessage', {
+                    message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
+                    style: 'gray',
+                }).then(() => trimmedQuestion);
+            });
+    } else {
+        // Try multiple selector approaches for conversation box
+        return cy.get('body').then(($body) => {
+            // Try the nth-child approach first
+            const childIndex = (questionIndex + 1) * 2 - 1;
+            if ($body.find(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`).length > 0) {
+                return cy.get(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`)
+                    .invoke('text')
+                    .then((question) => {
+                        const trimmedQuestion = question.trim();
+                        cy.task('logMessage', {
+                            message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
+                            style: 'gray',
+                        });
+                        
+                        // Wait for bot to stop speaking by checking bot panel border
+                        cy.task('logMessage', {
+                            message: 'Waiting for bot to finish speaking...',
+                            style: 'yellow',
+                        });
+                        
+                        // Poll until bot stops speaking (bot panel no longer has speaking border)
+                        const checkBotNotSpeaking = () => {
+                            return cy.get('body').then(($body) => {
+                                // Find the panel containing "Talently" text
+                                const talentlyText = $body.find('p:contains("Talently")');
+                                // Check if its parent has the speaking border
+                                const hasSpeakingBorder = talentlyText.closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
+                                
+                                if (hasSpeakingBorder) {
+                                    cy.task('logMessage', {
+                                        message: 'Bot still speaking, waiting...',
+                                        style: 'yellow',
+                                    });
+                                    return cy.wait(1000).then(() => checkBotNotSpeaking());
+                                }
+                                
+                                return cy.task('logMessage', {
+                                    message: 'Bot finished speaking',
+                                    style: 'green',
+                                }).then(() => trimmedQuestion);
+                            });
+                        };
+                        
+                        return checkBotNotSpeaking();
+                    });
+            } else {
+                // Fallback to getting all conversation elements and picking the right one
+                return cy.get(selectors.interview.conversationBox).eq(questionIndex)
+                    .invoke('text')
+                    .then((question) => {
+                        const trimmedQuestion = question.trim();
+                        cy.task('logMessage', {
+                            message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
+                            style: 'gray',
+                        });
+                        
+                        // Wait for bot to stop speaking by checking bot panel border
+                        cy.task('logMessage', {
+                            message: 'Waiting for bot to finish speaking...',
+                            style: 'yellow',
+                        });
+                        
+                        // Poll until bot stops speaking (bot panel no longer has speaking border)
+                        const checkBotNotSpeaking = () => {
+                            return cy.get('body').then(($body) => {
+                                // Find the panel containing "Talently" text
+                                const talentlyText = $body.find('p:contains("Talently")');
+                                // Check if its parent has the speaking border
+                                const hasSpeakingBorder = talentlyText.closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
+                                
+                                if (hasSpeakingBorder) {
+                                    cy.task('logMessage', {
+                                        message: 'Bot still speaking, waiting...',
+                                        style: 'yellow',
+                                    });
+                                    return cy.wait(1000).then(() => checkBotNotSpeaking());
+                                }
+                                
+                                return cy.task('logMessage', {
+                                    message: 'Bot finished speaking',
+                                    style: 'green',
+                                }).then(() => trimmedQuestion);
+                            });
+                        };
+                        
+                        return checkBotNotSpeaking();
+                    });
+            }
+        });
+    }
 });
 
 // Generate answer using API
@@ -226,9 +301,17 @@ Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, inter
 
 // Check if interview is completed
 Cypress.Commands.add('isInterviewCompleted', () => {
-    return cy.get('body').then(($body) => {
-        const html = $body.html();
-        return html.includes(selectors.interview.completedMessage);
+    return cy.url().then((url) => {
+        const isOnFeedbackPage = url.includes('feedback');
+        if (isOnFeedbackPage) {
+            return true;
+        }
+        
+        return cy.get('body').then(($body) => {
+            const html = $body.html();
+            const hasCompletionMessage = html.includes(selectors.interview.completedMessage);
+            return hasCompletionMessage;
+        });
     });
 });
 
@@ -352,10 +435,25 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                         message: 'Interview completion detected',
                                         style: 'green',
                                     });
+                                    
+                                    // Capture final state before redirect
+                                    cy.readFile(filepath).then((data) => {
+                                        data.completedAt = new Date().toISOString();
+                                        data.finalQuestionIndex = questionIndex;
+                                        cy.writeFile(filepath, data);
+                                    });
+                                    
+                                    // Wait for redirect to feedback page
+                                    cy.url({ timeout: 30000 }).should('include', 'feedback').then(() => {
+                                        cy.task('logMessage', {
+                                            message: 'Successfully redirected to feedback page',
+                                            style: 'green',
+                                        });
+                                    });
                                     return;
                                 }
                                 
-                                // Get next question
+                                // Get next question (with built-in text stabilization)
                                 cy.getQuestionFromBot(questionIndex).then((question) => {
                                     // Generate answer for all questions
                                     cy.generateAnswer(callId, userId, question, jobId, sid).then((answer) => {
@@ -366,7 +464,10 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                                 cy.writeFile(filepath, data);
                                             });
                                             questionIndex++;
+                                            // Wait for bot to process answer and provide feedback
                                             cy.wait(5000);
+                                            // Wait for next question using element-based wait
+                                            cy.get(selectors.interview.conversationBox, { timeout: 10000 }).should('exist');
                                             processQuestions();
                                         });
                                     });
