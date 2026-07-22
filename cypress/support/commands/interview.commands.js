@@ -43,7 +43,7 @@ Cypress.Commands.add('clickJoinNowButton', () => {
 });
 
 Cypress.Commands.add('clickStartInterviewButton', () => {
-    cy.get(selectors.candidate.startInterviewButton).click();
+    cy.get(selectors.candidate.startInterviewButton, { timeout: 30000 }).should('be.visible').click();
 });
 
 // Register candidate for interview
@@ -82,17 +82,16 @@ Cypress.Commands.add('joinAndStartInterview', () => {
         });
     });
     
-    // Wait for screen sharing modal and counter
-    cy.wait(20000);
+    // Wait for screen sharing modal and counter using element-based wait
     cy.clickStartInterviewButton();
 });
 
 // Handle inactivity modal
 Cypress.Commands.add('handleInactivityModal', () => {
-    cy.get('body').then(($body) => {
+    cy.get('body', { timeout: 15000 }).then(($body) => {
         if ($body.find(selectors.interview.inactivityModal).length > 0) {
             cy.log('Inactivity modal detected, clicking Resume button');
-            cy.get(selectors.interview.resumeButton).click();
+            cy.get(selectors.interview.resumeButton, { timeout: 10000 }).should('be.visible').click();
         } else {
             cy.log('No inactivity modal detected');
         }
@@ -101,10 +100,10 @@ Cypress.Commands.add('handleInactivityModal', () => {
 
 // Handle termination box
 Cypress.Commands.add('handleTerminationBox', () => {
-    cy.get('body').then(($body) => {
+    cy.get('body', { timeout: 15000 }).then(($body) => {
         if ($body.find(selectors.interview.terminationBox).length > 0) {
             cy.log('Termination box detected, clicking Continue button');
-            cy.get(selectors.interview.continueButton, { timeout: 30000 }).click();
+            cy.get(selectors.interview.continueButton, { timeout: 30000 }).should('be.visible').click();
         } else {
             cy.log('No termination box detected');
         }
@@ -112,9 +111,12 @@ Cypress.Commands.add('handleTerminationBox', () => {
 });
 
 // Get question from conversation box
-Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
+Cypress.Commands.add('getQuestionFromBot', (questionIndex, previousQuestion = '') => {
     cy.handleInactivityModal();
-    cy.wait(10000);
+    cy.handleTerminationBox();
+    
+    // Wait for conversation box to be available using element-based wait
+    cy.get(selectors.interview.conversationBox, { timeout: 15000 }).should('exist');
     
     // Try multiple selector approaches for conversation box
     return cy.get('body').then(($body) => {
@@ -297,8 +299,8 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                 cy.joinAndStartInterview();
                 
                 cy.get('@callData').then(({ callId }) => {
-                    // Wait for initial message and counter
-                    cy.wait(20000);
+                    // Wait for initial message using element-based wait
+                    cy.get(selectors.interview.conversationBox, { timeout: 30000 }).should('exist');
                     
                     // Get session storage sid using window directly
                     cy.window().then((win) => {
