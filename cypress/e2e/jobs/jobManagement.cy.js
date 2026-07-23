@@ -1,3 +1,5 @@
+import { selectors } from '../../support/selectors/selectors';
+
 describe('Job Management Tests', () => {
     Cypress.on('uncaught:exception', (err, runnable) => {
         return false;
@@ -23,7 +25,7 @@ describe('Job Management Tests', () => {
         cy.contains('Archive').should('be.visible');
 
         // Verify search input is visible
-        cy.get('input[placeholder*="Search"], input[type="search"]').should('be.visible');
+        cy.get(selectors.jobs.searchInput).should('be.visible');
 
         cy.task('logMessage', {
             message: 'Job listing page displayed successfully with tabs',
@@ -42,12 +44,11 @@ describe('Job Management Tests', () => {
             // Search for the job
             cy.searchJob(jobTitle);
 
-            // Verify search results show the job
+            // Verify search results show the job (assertion retries — no fixed wait needed)
             cy.contains(jobTitle, { timeout: 10000 }).should('be.visible');
 
             // Clear search
-            cy.get('input[placeholder*="Search"], input[type="search"]').clear();
-            cy.wait(2000);
+            cy.get(selectors.jobs.searchInput, { timeout: 10000 }).clear();
         });
 
         cy.task('logMessage', {
@@ -85,22 +86,33 @@ describe('Job Management Tests', () => {
             style: 'blue',
         });
 
-        // Get job title before archiving
-        cy.getJobTitleByIndex(0).then((jobTitle) => {
-            // Archive the job
-            cy.archiveJob(0);
+        // The list is paginated (only a page of cards is rendered) and titles are NOT unique, so
+        // verify via the Active tab's TOTAL count (e.g. "Active Jobs 50"), not visible card count.
+        // Wait until the count has actually loaded (> 0) before capturing it.
+        cy.get(selectors.jobs.activeTab)
+            .should(($t) => expect(parseInt($t.text().replace(/\D/g, ''), 10)).to.be.greaterThan(0))
+            .invoke('text')
+            .then((text) => {
+                const activeCountBefore = parseInt(text.replace(/\D/g, ''), 10);
 
-            // Verify job is no longer in Active tab
-            cy.switchJobTab('Active');
-            cy.contains(jobTitle).should('not.exist');
+                cy.getJobTitleByIndex(0).then((jobTitle) => {
+                    // Archive the job
+                    cy.archiveJob(0);
 
-            // Verify job is in Archive tab
-            cy.switchJobTab('Archive');
-            cy.contains(jobTitle, { timeout: 10000 }).should('be.visible');
+                    // Active total should drop by one (retries until the refetch settles)
+                    cy.get(selectors.jobs.activeTab, { timeout: 15000 }).should(($t) => {
+                        const now = parseInt($t.text().replace(/\D/g, ''), 10);
+                        expect(now, 'active job count after archive').to.be.lessThan(activeCountBefore);
+                    });
 
-            // Clean up - reopen the job
-            cy.reopenJob(0);
-        });
+                    // Verify the job now appears under the Archive tab
+                    cy.switchJobTab('Archive');
+                    cy.contains(jobTitle, { timeout: 10000 }).should('be.visible');
+
+                    // Clean up - reopen the first archived job
+                    cy.reopenJob(0);
+                });
+            });
 
         cy.task('logMessage', {
             message: 'Job archived and moved to Archive tab successfully',
@@ -151,9 +163,9 @@ describe('Job Management Tests', () => {
         // Verify we're on edit page
         cy.url().should('include', '/edit-job');
 
-        // Navigate back to job listing
+        // Navigate back to job listing (wait for the listing to be ready, not a fixed delay)
         cy.visit('/create-job');
-        cy.wait(2000);
+        cy.get(selectors.jobs.activeTab, { timeout: 10000 }).should('be.visible');
 
         cy.task('logMessage', {
             message: 'Navigated to edit job page successfully',
@@ -173,9 +185,9 @@ describe('Job Management Tests', () => {
         // Verify we're on duplicate page
         cy.url().should('include', '/duplicate-job');
 
-        // Navigate back to job listing
+        // Navigate back to job listing (wait for the listing to be ready, not a fixed delay)
         cy.visit('/create-job');
-        cy.wait(2000);
+        cy.get(selectors.jobs.activeTab, { timeout: 10000 }).should('be.visible');
 
         cy.task('logMessage', {
             message: 'Navigated to duplicate job page successfully',
@@ -183,21 +195,28 @@ describe('Job Management Tests', () => {
         });
     });
 
-    it('should delete a job', () => {
+    // SKIPPED: deleting a job is PERMANENT (no undo, unlike archive) and would destroy a real
+    // job in the workspace on every run. Deletion is also async (marked_for_deletion) and, because
+    // job titles are not unique, would remove an arbitrary matching job. Enable only against a
+    // dedicated throwaway job. The cy.deleteJob command types the job title into the confirm modal.
+    it.skip('should delete a job', () => {
         cy.task('logMessage', {
             message: 'Test Case: Should delete a job',
             style: 'blue',
         });
 
-        // Get job count before deletion
-        cy.get('.bg-white, .rounded-lg').then(($cards) => {
+        // Get job count and the title (needed to confirm deletion) before deleting
+        cy.get(selectors.jobs.jobCard).then(($cards) => {
             const initialCount = $cards.length;
 
-            // Delete the job
-            cy.deleteJob(0);
+            cy.getJobTitleByIndex(0).then((jobTitle) => {
+                // Delete the job (delete modal requires typing the exact title to confirm)
+                cy.deleteJob(0, jobTitle);
 
-            // Verify job count decreased
-            cy.get('.bg-white, .rounded-lg').should('have.length', initialCount - 1);
+                // Verify job count decreased
+                cy.get(selectors.jobs.jobCard, { timeout: 10000 })
+                    .should('have.length.lessThan', initialCount);
+            });
         });
 
         cy.task('logMessage', {
@@ -212,9 +231,12 @@ describe('Job Management Tests', () => {
             style: 'blue',
         });
 
-        // Get job title and verify status
+        // Active job cards carry no "Active" text label in the UI — status is represented by the
+        // tab the job sits under. Verify the Active tab is selected and a job is listed there.
+        cy.switchJobTab('Active');
+        cy.get(selectors.jobs.activeTab).should('have.attr', 'data-state', 'active');
         cy.getJobTitleByIndex(0).then((jobTitle) => {
-            cy.verifyJobStatus(jobTitle, 'Active');
+            cy.contains(jobTitle, { timeout: 10000 }).should('be.visible');
         });
 
         cy.task('logMessage', {
@@ -231,16 +253,16 @@ describe('Job Management Tests', () => {
 
         // Check if load more button exists
         cy.get('body').then(($body) => {
-            if ($body.find('button:contains("Load More Jobs")').length > 0) {
+            if ($body.find(selectors.jobs.loadMoreButton).length > 0) {
                 // Get initial job count
-                cy.get('.bg-white, .rounded-lg').then(($cards) => {
+                cy.get(selectors.jobs.jobCard).then(($cards) => {
                     const initialCount = $cards.length;
 
                     // Load more jobs
                     cy.loadMoreJobs();
 
-                    // Verify job count increased
-                    cy.get('.bg-white, .rounded-lg').should('have.length.greaterThan', initialCount);
+                    // Verify job count increased (assertion retries until more cards render)
+                    cy.get(selectors.jobs.jobCard).should('have.length.greaterThan', initialCount);
                 });
             } else {
                 cy.task('logMessage', {
@@ -263,16 +285,13 @@ describe('Job Management Tests', () => {
         });
 
         // Verify job cards are visible
-        cy.get('.bg-white, .rounded-lg', { timeout: 10000 }).should('have.length.greaterThan', 0);
+        cy.get(selectors.jobs.jobCard, { timeout: 10000 }).should('have.length.greaterThan', 0);
 
         // Verify job title is visible
-        cy.get('h3, h4, .text-lg, .font-medium').first().should('be.visible');
+        cy.get(selectors.jobs.jobTitle).first().should('be.visible');
 
-        // Verify job status is visible
-        cy.contains('Active, Archived').first().should('be.visible');
-
-        // Verify dropdown trigger is visible
-        cy.get('[aria-label="job-status"], button:has(svg)').first().should('be.visible');
+        // Verify the per-card actions (kebab) trigger is visible
+        cy.get(selectors.jobs.jobDropdownTrigger).first().should('be.visible');
 
         cy.task('logMessage', {
             message: 'Job card details displayed correctly',
@@ -291,7 +310,7 @@ describe('Job Management Tests', () => {
 
         // Verify no results or empty state is shown
         cy.get('body').then(($body) => {
-            if ($body.find('.bg-white, .rounded-lg').length === 0) {
+            if ($body.find(selectors.jobs.jobCard).length === 0) {
                 cy.task('logMessage', {
                     message: 'No jobs found for search query',
                     style: 'yellow',
@@ -299,9 +318,8 @@ describe('Job Management Tests', () => {
             }
         });
 
-        // Clear search
-        cy.get('input[placeholder*="Search"], input[type="search"]').clear();
-        cy.wait(2000);
+        // Clear search and wait for the input to actually clear (dynamic, not a fixed delay)
+        cy.get(selectors.jobs.searchInput).clear().should('have.value', '');
 
         cy.task('logMessage', {
             message: 'Empty search results handled correctly',
@@ -317,21 +335,21 @@ describe('Job Management Tests', () => {
 
         // Open dropdown and click archive
         cy.openJobDropdown(0);
-        cy.get('[data-value="archived"]', { timeout: 5000 }).click();
+        cy.get(selectors.jobs.archiveOption, { timeout: 5000 }).click();
 
         // Verify modal is visible
-        cy.get('.fixed.inset-0', { timeout: 5000 }).should('be.visible');
+        cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('be.visible');
 
         // Verify modal title
         cy.contains('close this job position', { timeout: 5000 }).should('be.visible');
 
-        // Verify modal has confirmation and cancel buttons
-        cy.get('button:contains("Confirm")').should('be.visible');
-        cy.get('button:contains("Cancel")').should('be.visible');
+        // Verify modal has confirmation (Yes) and cancel (No) controls
+        cy.get(selectors.jobs.switchStatusConfirmButton).should('be.visible');
+        cy.get(selectors.jobs.switchStatusCancelButton).should('be.visible');
 
         // Cancel the action
-        cy.get('button:contains("Cancel")').click();
-        cy.get('.fixed.inset-0', { timeout: 5000 }).should('not.exist');
+        cy.get(selectors.jobs.switchStatusCancelButton).click();
+        cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('not.exist');
 
         cy.task('logMessage', {
             message: 'Archive modal displays correct information',
@@ -354,17 +372,17 @@ describe('Job Management Tests', () => {
 
             // Open dropdown and click active/reopen
             cy.openJobDropdown(0);
-            cy.get('[data-value="active"]', { timeout: 5000 }).click();
+            cy.get(selectors.jobs.activeOption, { timeout: 5000 }).click();
 
             // Verify modal is visible
-            cy.get('.fixed.inset-0', { timeout: 5000 }).should('be.visible');
+            cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('be.visible');
 
             // Verify modal title
             cy.contains('reopen this job position', { timeout: 5000 }).should('be.visible');
 
-            // Confirm the action
-            cy.get('button:contains("Confirm")').click();
-            cy.get('.fixed.inset-0', { timeout: 5000 }).should('not.exist');
+            // Confirm the action (Yes)
+            cy.get(selectors.jobs.switchStatusConfirmButton).click();
+            cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('not.exist');
 
             // Switch back to Active tab
             cy.switchJobTab('Active');

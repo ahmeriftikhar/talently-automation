@@ -13,35 +13,33 @@ Cypress.Commands.add('navigateToJobListing', () => {
 // Search for a job
 Cypress.Commands.add('searchJob', (searchTerm) => {
     cy.log(`Searching for job: ${searchTerm}`);
-    cy.get(selectors.jobs.searchInput, { timeout: 10000 }).clear().type(searchTerm);
-    cy.wait(2000); // Wait for search results to load
+    // Assert the value landed (dynamic) instead of a fixed wait; callers assert on results with retry.
+    cy.get(selectors.jobs.searchInput, { timeout: 10000 }).clear().type(searchTerm).should('have.value', searchTerm);
 });
 
 // Switch between Active and Archive tabs
 Cypress.Commands.add('switchJobTab', (tab) => {
     cy.log(`Switching to ${tab} tab`);
-    if (tab === 'Active') {
-        cy.get(selectors.jobs.activeTab).click();
-    } else if (tab === 'Archive') {
-        cy.get(selectors.jobs.archiveTab).click();
-    }
-    cy.wait(1000); // Wait for tab content to load
+    const tabSelector = tab === 'Active' ? selectors.jobs.activeTab : selectors.jobs.archiveTab;
+    cy.get(tabSelector).click();
+    // Wait for the Radix tab to actually become active instead of a fixed delay.
+    cy.get(tabSelector).should('have.attr', 'data-state', 'active');
 });
 
-// Open job dropdown menu
+// Open job dropdown menu (Radix DropdownMenu kebab per card)
 Cypress.Commands.add('openJobDropdown', (jobIndex = 0) => {
     cy.log(`Opening job dropdown for job at index ${jobIndex}`);
-    cy.get('button:has(svg)').eq(jobIndex + 1).click(); // +1 to skip sidebar buttons
+    cy.get(selectors.jobs.jobDropdownTrigger, { timeout: 10000 }).eq(jobIndex).click();
 });
 
 // Archive a job
 Cypress.Commands.add('archiveJob', (jobIndex = 0) => {
     cy.log(`Archiving job at index ${jobIndex}`);
     cy.openJobDropdown(jobIndex);
-    cy.contains('Archive', { timeout: 5000 }).click();
-    cy.get('.fixed.inset-0', { timeout: 5000 }).should('be.visible');
-    cy.get('button:contains("Confirm")').click();
-    cy.get('.fixed.inset-0', { timeout: 5000 }).should('not.exist');
+    cy.get(selectors.jobs.archiveOption, { timeout: 5000 }).click();
+    cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('be.visible');
+    cy.get(selectors.jobs.switchStatusConfirmButton).click();
+    cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('not.exist');
     cy.task('logMessage', {
         message: 'Job archived successfully',
         style: 'green',
@@ -52,10 +50,10 @@ Cypress.Commands.add('archiveJob', (jobIndex = 0) => {
 Cypress.Commands.add('reopenJob', (jobIndex = 0) => {
     cy.log(`Reopening job at index ${jobIndex}`);
     cy.openJobDropdown(jobIndex);
-    cy.contains('Active', { timeout: 5000 }).click();
-    cy.get('.fixed.inset-0', { timeout: 5000 }).should('be.visible');
-    cy.get('button:contains("Confirm")').click();
-    cy.get('.fixed.inset-0', { timeout: 5000 }).should('not.exist');
+    cy.get(selectors.jobs.activeOption, { timeout: 5000 }).click();
+    cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('be.visible');
+    cy.get(selectors.jobs.switchStatusConfirmButton).click();
+    cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('not.exist');
     cy.task('logMessage', {
         message: 'Job reopened successfully',
         style: 'green',
@@ -66,7 +64,7 @@ Cypress.Commands.add('reopenJob', (jobIndex = 0) => {
 Cypress.Commands.add('editJob', (jobIndex = 0) => {
     cy.log(`Editing job at index ${jobIndex}`);
     cy.openJobDropdown(jobIndex);
-    cy.contains('Edit Job', { timeout: 5000 }).click();
+    cy.get(selectors.jobs.editJobOption, { timeout: 5000 }).click();
     cy.url().should('include', '/edit-job');
     cy.task('logMessage', {
         message: 'Navigated to job edit page',
@@ -74,7 +72,7 @@ Cypress.Commands.add('editJob', (jobIndex = 0) => {
     });
 });
 
-// Clone/Duplicate a job
+// Clone/Duplicate a job ("Clone Job" menu item)
 Cypress.Commands.add('duplicateJob', (jobIndex = 0) => {
     cy.log(`Duplicating job at index ${jobIndex}`);
     cy.openJobDropdown(jobIndex);
@@ -86,14 +84,20 @@ Cypress.Commands.add('duplicateJob', (jobIndex = 0) => {
     });
 });
 
-// Delete a job
-Cypress.Commands.add('deleteJob', (jobIndex = 0) => {
+// Delete a job (admin/owner only). The confirm modal (ConfirmActionList) REQUIRES typing the
+// job title before the delete is enabled — caller must pass the exact title.
+Cypress.Commands.add('deleteJob', (jobIndex = 0, jobTitle) => {
     cy.log(`Deleting job at index ${jobIndex}`);
     cy.openJobDropdown(jobIndex);
-    cy.contains('Delete', { timeout: 5000 }).click();
-    cy.get(selectors.jobs.confirmDeleteButton, { timeout: 5000 }).click();
+    cy.get(selectors.jobs.deleteJobOption, { timeout: 5000 }).click();
+    cy.get(selectors.jobs.deleteConfirmModalTitle, { timeout: 5000 }).should('be.visible');
+    if (jobTitle) {
+        // Type the exact job title into the confirmation input to enable the delete action
+        cy.get(selectors.jobs.deleteConfirmInput).clear().type(jobTitle).should('have.value', jobTitle);
+    }
+    cy.get(selectors.jobs.deleteConfirmButton, { timeout: 5000 }).click();
     cy.task('logMessage', {
-        message: 'Job deleted successfully',
+        message: 'Job delete confirmed',
         style: 'green',
     });
 });
@@ -112,16 +116,15 @@ Cypress.Commands.add('verifyJobInArchiveTab', (jobTitle) => {
     cy.contains(jobTitle, { timeout: 10000 }).should('be.visible');
 });
 
-// Get job title by index
+// Get job title by index (reads the card's <h5> title; strips any "[Draft]" prefix).
+// NOTE: the callback returns a plain string and queues NO cy commands — do not add cy.* here,
+// or Cypress throws "mixing up async and sync code".
 Cypress.Commands.add('getJobTitleByIndex', (jobIndex = 0) => {
     cy.log(`Getting job title at index ${jobIndex}`);
-    return cy.get('h3, h4, .text-lg, .font-medium').eq(jobIndex).invoke('text').then((title) => {
-        cy.task('logMessage', {
-            message: `Job title: ${title}`,
-            style: 'gray',
-        });
-        return title.trim();
-    });
+    return cy.get(selectors.jobs.jobTitle, { timeout: 10000 })
+        .eq(jobIndex)
+        .invoke('text')
+        .then((title) => title.replace('[Draft]', '').trim());
 });
 
 // Verify job count
@@ -130,11 +133,10 @@ Cypress.Commands.add('verifyJobCount', (expectedCount) => {
     cy.get(selectors.jobs.jobCard).should('have.length', expectedCount);
 });
 
-// Load more jobs
+// Load more jobs (no fixed wait — the caller asserts the card count increased, which retries)
 Cypress.Commands.add('loadMoreJobs', () => {
     cy.log('Loading more jobs');
     cy.get(selectors.jobs.loadMoreButton, { timeout: 10000 }).click();
-    cy.wait(2000); // Wait for more jobs to load
 });
 
 // Verify job status
