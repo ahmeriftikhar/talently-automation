@@ -1,8 +1,8 @@
 # Dependencies
 node_modules/
 
-# Local environment / secrets
-cypress.env.json
+# # Local environment / secrets
+# cypress.env.json
 
 # Cypress artifacts
 cypress/videos/
