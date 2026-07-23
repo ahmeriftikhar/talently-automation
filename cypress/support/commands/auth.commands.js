@@ -1,17 +1,37 @@
 import { selectors } from '../selectors/selectors';
 
-Cypress.Commands.add('handleCookieConsent', () => {
-    // Wait for cookie consent modal to appear with extended timeout
-    cy.wait(3000);
-    cy.get('body', { timeout: 10000 }).then(($body) => {
-        if ($body.find(selectors.cookies.acceptAllButton, { timeout: 10000 }).length > 0) {
-            cy.log('Cookie consent modal detected - accepting all cookies');
-            cy.get(selectors.cookies.acceptAllButton, { timeout: 5000 }).should('be.visible').click();
-            cy.get(selectors.cookies.acceptAllButton, { timeout: 5000 }).should('not.exist');
-        } else {
-            cy.log('No cookie consent modal detected');
-        }
-    });
+Cypress.Commands.add('handleCookieConsent', ({ timeout = 15000, interval = 500 } = {}) => {
+    // The consent modal loads asynchronously and can appear AFTER the page is otherwise ready.
+    // Instead of a fixed cy.wait (which misses a late modal and then lets it block later clicks),
+    // poll the DOM up to `timeout` ms: dismiss the modal the moment it appears, and if it never
+    // shows within the window, continue gracefully (it is optional, not every visit shows it).
+    const acceptBtn = selectors.cookies.acceptAllButton;
+    const maxAttempts = Math.max(1, Math.ceil(timeout / interval));
+
+    const poll = (attemptsLeft) => {
+        return cy.get('body', { log: false }).then(($body) => {
+            if ($body.find(acceptBtn).length > 0) {
+                cy.log('Cookie consent modal detected - accepting all cookies');
+                cy.get(acceptBtn, { timeout: interval }).click({ force: true });
+                // Ensure it is actually gone before proceeding, so it cannot overlay the login form.
+                return cy
+                    .get('body', { log: false })
+                    .should(($b) => {
+                        expect($b.find(acceptBtn).length, 'cookie consent dismissed').to.eq(0);
+                    });
+            }
+
+            if (attemptsLeft <= 1) {
+                cy.log('No cookie consent modal appeared within timeout - continuing');
+                return;
+            }
+
+            // Not there yet — wait one short interval and re-check (handles the late-loading case).
+            return cy.wait(interval, { log: false }).then(() => poll(attemptsLeft - 1));
+        });
+    };
+
+    return poll(maxAttempts);
 });
 
 Cypress.Commands.add('navigateToJobsPage', () => {

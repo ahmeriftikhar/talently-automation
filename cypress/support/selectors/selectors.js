@@ -103,6 +103,7 @@ export const selectors = {
         conversationBox: '.overflow-hidden > .text-xs',
         inactivityModal: '.modal-dialog',
         resumeButton: 'button:contains("Resume Interview")',
+        stopButton: '#stop-interview',
         continueButton: 'button:contains("Continue")',
         terminationBox: '.fixed.inset-0',
         terminationTimer: '.text-\\[18px\\]',
