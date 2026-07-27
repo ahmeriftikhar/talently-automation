@@ -63,16 +63,13 @@ describe('Job Management Tests', () => {
             style: 'blue',
         });
 
-        // Start on Active tab
-        cy.contains('Active').should('be.visible');
-
-        // Switch to Archive tab
+        // Mutation-free tab check: assert the Radix tab actually becomes the active one.
+        // (switchJobTab asserts data-state=active internally; assert the inactive side too.)
         cy.switchJobTab('Archive');
-        cy.contains('Archive').should('be.visible');
+        cy.get(selectors.jobs.activeTab).should('have.attr', 'data-state', 'inactive');
 
-        // Switch back to Active tab
         cy.switchJobTab('Active');
-        cy.contains('Active').should('be.visible');
+        cy.get(selectors.jobs.archiveTab).should('have.attr', 'data-state', 'inactive');
 
         cy.task('logMessage', {
             message: 'Tab switching functionality working correctly',
@@ -225,104 +222,145 @@ describe('Job Management Tests', () => {
         });
     });
 
-    it('should verify job status display', () => {
+    it('should reflect job status through the per-card menu options', () => {
         cy.task('logMessage', {
-            message: 'Test Case: Should verify job status display',
+            message: 'Test Case: Should reflect job status through the per-card menu options',
             style: 'blue',
         });
 
-        // Active job cards carry no "Active" text label in the UI — status is represented by the
-        // tab the job sits under. Verify the Active tab is selected and a job is listed there.
+        // Job cards have no textual status label — status is expressed by which tab the job sits
+        // under AND by the kebab menu: an ACTIVE job offers "Archive Job" (and no reopen), an
+        // ARCHIVED job offers "Active Job" (reopen, and no archive). Both menu items are always in
+        // the DOM; the app toggles them with a `hidden` class, so assert visibility (not existence).
         cy.switchJobTab('Active');
-        cy.get(selectors.jobs.activeTab).should('have.attr', 'data-state', 'active');
         cy.getJobTitleByIndex(0).then((jobTitle) => {
+            // Active job -> Archive visible, reopen hidden
+            cy.openJobDropdown(0);
+            cy.get(selectors.jobs.archiveOption, { timeout: 5000 }).should('be.visible');
+            cy.get(selectors.jobs.activeOption).should('not.be.visible');
+            cy.get('body').type('{esc}');
+
+            // Flip it to archived, then assert the menu now exposes reopen and hides archive
+            cy.archiveJob(0);
+            cy.switchJobTab('Archive');
             cy.contains(jobTitle, { timeout: 10000 }).should('be.visible');
+            cy.openJobDropdown(0);
+            cy.get(selectors.jobs.activeOption, { timeout: 5000 }).should('be.visible');
+            cy.get(selectors.jobs.archiveOption).should('not.be.visible');
+            cy.get('body').type('{esc}');
+
+            // Restore original state
+            cy.reopenJob(0);
         });
 
         cy.task('logMessage', {
-            message: 'Job status verified successfully',
+            message: 'Job status affordances verified for active and archived jobs',
             style: 'green',
         });
     });
 
-    it('should load more jobs when available', () => {
+    it('should show Load More only when the total exceeds the rendered page', () => {
         cy.task('logMessage', {
-            message: 'Test Case: Should load more jobs when available',
+            message: 'Test Case: Should show Load More only when the total exceeds the rendered page',
             style: 'blue',
         });
 
-        // Check if load more button exists
-        cy.get('body').then(($body) => {
-            if ($body.find(selectors.jobs.loadMoreButton).length > 0) {
-                // Get initial job count
+        // The Active tab label carries the true total (e.g. "Active Jobs 50"). Compare it to the
+        // number of cards actually rendered to derive whether Load More MUST exist — then assert
+        // it, so both branches carry a real assertion (the old test's else-branch asserted nothing).
+        cy.switchJobTab('Active');
+        cy.get(selectors.jobs.activeTab)
+            .should(($t) => expect(parseInt($t.text().replace(/\D/g, ''), 10)).to.be.greaterThan(0))
+            .invoke('text')
+            .then((text) => {
+                const totalActive = parseInt(text.replace(/\D/g, ''), 10);
+
                 cy.get(selectors.jobs.jobCard).then(($cards) => {
-                    const initialCount = $cards.length;
+                    const rendered = $cards.length;
 
-                    // Load more jobs
-                    cy.loadMoreJobs();
-
-                    // Verify job count increased (assertion retries until more cards render)
-                    cy.get(selectors.jobs.jobCard).should('have.length.greaterThan', initialCount);
+                    if (rendered < totalActive) {
+                        // More jobs exist than are rendered -> button must be present and must work.
+                        // It sits at the bottom of a scrollable (overflow) container, so scroll it
+                        // into view before asserting visibility / clicking.
+                        cy.get(selectors.jobs.loadMoreButton).should('exist').scrollIntoView().should('be.visible');
+                        cy.loadMoreJobs();
+                        cy.get(selectors.jobs.jobCard).should('have.length.greaterThan', rendered);
+                    } else {
+                        // Everything is already on screen -> the button must NOT be present.
+                        cy.get(selectors.jobs.loadMoreButton).should('not.exist');
+                    }
                 });
-            } else {
-                cy.task('logMessage', {
-                    message: 'Load more button not available - all jobs loaded',
-                    style: 'yellow',
-                });
-            }
-        });
+            });
 
         cy.task('logMessage', {
-            message: 'Load more functionality verified',
+            message: 'Load More visibility matches total vs rendered count',
             style: 'green',
         });
     });
 
-    it('should verify job card details are displayed', () => {
+    it('should display the key fields on a job card', () => {
         cy.task('logMessage', {
-            message: 'Test Case: Should verify job card details are displayed',
+            message: 'Test Case: Should display the key fields on a job card',
             style: 'blue',
         });
 
-        // Verify job cards are visible
         cy.get(selectors.jobs.jobCard, { timeout: 10000 }).should('have.length.greaterThan', 0);
 
-        // Verify job title is visible
-        cy.get(selectors.jobs.jobTitle).first().should('be.visible');
+        // Assert the actual content of the first card — title, interview-type badge, the three
+        // candidate stat tiles, the total, and a correctly formatted last-updated date — rather
+        // than only that generic elements exist. All of these render for both draft and published
+        // cards (only the interview-link block is draft-conditional), so this is stable per card.
+        cy.get(selectors.jobs.jobCard).first().within(() => {
+            // Title present and non-empty (ignoring any [Draft] prefix)
+            cy.get('h5').first().should('be.visible').invoke('text').then((t) => {
+                expect(t.replace('[Draft]', '').trim(), 'job title').to.not.be.empty;
+            });
 
-        // Verify the per-card actions (kebab) trigger is visible
-        cy.get(selectors.jobs.jobDropdownTrigger).first().should('be.visible');
+            // Interview-type badge: every card shows exactly "Dynamic" or "Fixed"
+            cy.contains(/^(Dynamic|Fixed)$/).should('be.visible');
+
+            // Candidate stat tiles
+            cy.contains('Applied').should('be.visible');
+            cy.contains('Shortlisted').should('be.visible');
+            cy.contains('Rejected').should('be.visible');
+
+            // Aggregate count + last-updated timestamp (asserted in dd/MM/yyyy format)
+            cy.contains('Total Candidates:').should('be.visible');
+            cy.contains('Last Updated:')
+                .should('be.visible')
+                .invoke('text')
+                .should('match', /\d{2}\/\d{2}\/\d{4}/);
+
+            // Per-card actions (kebab) trigger
+            cy.get(selectors.jobs.jobDropdownTrigger).should('be.visible');
+        });
 
         cy.task('logMessage', {
-            message: 'Job card details displayed correctly',
+            message: 'Job card renders title, type, stat tiles, total and last-updated date',
             style: 'green',
         });
     });
 
-    it('should handle empty search results', () => {
+    it('should show a no-results message for a search with no matches', () => {
         cy.task('logMessage', {
-            message: 'Test Case: Should handle empty search results',
+            message: 'Test Case: Should show a no-results message for a search with no matches',
             style: 'blue',
         });
 
-        // Search for non-existent job
-        cy.searchJob('NonExistentJob123456789');
+        // The top-bar search is a GLOBAL dropdown search (jobs/candidates/users) — it does NOT
+        // filter the job-list cards below. On a term with no matches it renders an explicit
+        // "No results found for "<term>"" empty state inside the dropdown.
+        const term = 'NonExistentJob123456789';
+        cy.get(selectors.jobs.searchInput, { timeout: 10000 }).clear().type(term).should('have.value', term);
 
-        // Verify no results or empty state is shown
-        cy.get('body').then(($body) => {
-            if ($body.find(selectors.jobs.jobCard).length === 0) {
-                cy.task('logMessage', {
-                    message: 'No jobs found for search query',
-                    style: 'yellow',
-                });
-            }
-        });
+        cy.contains(`No results found for "${term}"`, { timeout: 15000 }).should('be.visible');
 
-        // Clear search and wait for the input to actually clear (dynamic, not a fixed delay)
+        // Clearing the query removes the empty-state message.
         cy.get(selectors.jobs.searchInput).clear().should('have.value', '');
+        cy.contains('No results found for').should('not.exist');
 
         cy.task('logMessage', {
-            message: 'Empty search results handled correctly',
+            message: 'Global search shows a no-results message and clears correctly',
             style: 'green',
         });
     });
