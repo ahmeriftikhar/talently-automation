@@ -156,25 +156,47 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
     cy.handleTerminationBox();
     // Wait for conversation box to be available using element-based wait
     cy.get(selectors.interview.conversationBox, { timeout: 15000 }).should('exist');
-    if (questionIndex == 0) { 
-        cy.wait(15000); // Wait for 15 seconds for the bot to finish speaking question
-        return cy.get(`:nth-child(1) > ${selectors.interview.conversationBox}`)
-            .invoke('text')
-            .then((question) => {
-                const trimmedQuestion = question.trim();
-                const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
-                if (isCompletionMessage) {
-                    cy.log(isCompletionMessage);
-                    return cy.task('logMessage', {
-                        message: 'Completion message detected instead of a question',
-                        style: 'green',
-                    }).then(() => null);
-                }
-                cy.task('logMessage', {
-                    message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
-                    style: 'gray',
-                }).then(() => trimmedQuestion);
+    if (questionIndex == 0) {
+        // Dynamically wait for the bot to START and then FINISH speaking the first question,
+        // instead of a fixed cy.wait. The bot panel (the one with the "Talently" label) carries the
+        // ring class `border-4 border-[#00BBF9]` while it is speaking. Waiting for it to start first
+        // avoids reading/answering before the bot has begun — the race that got stuck.
+        const isBotSpeaking = ($body) =>
+            $body.find('p:contains("Talently")').closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
+
+        const waitForBotToStart = (elapsed) =>
+            cy.get('body', { log: false }).then(($body) => {
+                if (isBotSpeaking($body) || elapsed >= 30000) return;
+                return cy.wait(1000, { log: false }).then(() => waitForBotToStart(elapsed + 1000));
             });
+
+        const waitForBotToFinish = (elapsed) =>
+            cy.get('body', { log: false }).then(($body) => {
+                if (!isBotSpeaking($body) || elapsed >= 180000) return;
+                return cy.wait(1000, { log: false }).then(() => waitForBotToFinish(elapsed + 1000));
+            });
+
+        return waitForBotToStart(0)
+            .then(() => waitForBotToFinish(0))
+            .then(() =>
+                cy.get(`:nth-child(1) > ${selectors.interview.conversationBox}`)
+                    .invoke('text')
+                    .then((question) => {
+                        const trimmedQuestion = question.trim();
+                        const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
+                        if (isCompletionMessage) {
+                            cy.log(isCompletionMessage);
+                            return cy.task('logMessage', {
+                                message: 'Completion message detected instead of a question',
+                                style: 'green',
+                            }).then(() => null);
+                        }
+                        return cy.task('logMessage', {
+                            message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
+                            style: 'gray',
+                        }).then(() => trimmedQuestion);
+                    })
+            );
     } else {
         // Try multiple selector approaches for conversation box
         return cy.get('body').then(($body) => {
@@ -198,36 +220,39 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                             style: 'gray',
                         });
                         
-                        // Wait for bot to stop speaking by checking bot panel border
+                        // Wait for the bot to START speaking, then wait for it to FINISH, before
+                        // answering. Polling only for "not speaking" races the audio: right after the
+                        // question text appears the bot has not begun speaking yet, so the ring is
+                        // absent and we'd wrongly conclude it finished — the answer then overrides the
+                        // bot's speech and the interview gets messed up.
+                        const isBotSpeaking = ($body) =>
+                            $body.find('p:contains("Talently")').closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
+
+                        const waitForBotToStart = (elapsed) =>
+                            cy.get('body', { log: false }).then(($b) => {
+                                if (isBotSpeaking($b) || elapsed >= 30000) return;
+                                return cy.wait(1000, { log: false }).then(() => waitForBotToStart(elapsed + 1000));
+                            });
+
+                        const waitForBotToFinish = (elapsed) =>
+                            cy.get('body', { log: false }).then(($b) => {
+                                if (!isBotSpeaking($b) || elapsed >= 180000) return;
+                                return cy.wait(1000, { log: false }).then(() => waitForBotToFinish(elapsed + 1000));
+                            });
+
                         cy.task('logMessage', {
-                            message: 'Waiting for bot to finish speaking...',
+                            message: 'Waiting for bot to start, then finish speaking...',
                             style: 'yellow',
                         });
-                        
-                        // Poll until bot stops speaking (bot panel no longer has speaking border)
-                        const checkBotNotSpeaking = () => {
-                            return cy.get('body').then(($body) => {
-                                // Find the panel containing "Talently" text
-                                const talentlyText = $body.find('p:contains("Talently")');
-                                // Check if its parent has the speaking border
-                                const hasSpeakingBorder = talentlyText.closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
-                                
-                                if (hasSpeakingBorder) {
-                                    cy.task('logMessage', {
-                                        message: 'Bot still speaking, waiting...',
-                                        style: 'yellow',
-                                    });
-                                    return cy.wait(1000).then(() => checkBotNotSpeaking());
-                                }
-                                
-                                return cy.task('logMessage', {
+
+                        return waitForBotToStart(0)
+                            .then(() => waitForBotToFinish(0))
+                            .then(() =>
+                                cy.task('logMessage', {
                                     message: 'Bot finished speaking',
                                     style: 'green',
-                                }).then(() => trimmedQuestion);
-                            });
-                        };
-                        
-                        return checkBotNotSpeaking();
+                                }).then(() => trimmedQuestion)
+                            );
                     });
             } else {
                 // Fallback to getting all conversation elements and picking the right one
@@ -248,36 +273,39 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                             style: 'gray',
                         });
                         
-                        // Wait for bot to stop speaking by checking bot panel border
+                        // Wait for the bot to START speaking, then wait for it to FINISH, before
+                        // answering. Polling only for "not speaking" races the audio: right after the
+                        // question text appears the bot has not begun speaking yet, so the ring is
+                        // absent and we'd wrongly conclude it finished — the answer then overrides the
+                        // bot's speech and the interview gets messed up.
+                        const isBotSpeaking = ($body) =>
+                            $body.find('p:contains("Talently")').closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
+
+                        const waitForBotToStart = (elapsed) =>
+                            cy.get('body', { log: false }).then(($b) => {
+                                if (isBotSpeaking($b) || elapsed >= 30000) return;
+                                return cy.wait(1000, { log: false }).then(() => waitForBotToStart(elapsed + 1000));
+                            });
+
+                        const waitForBotToFinish = (elapsed) =>
+                            cy.get('body', { log: false }).then(($b) => {
+                                if (!isBotSpeaking($b) || elapsed >= 180000) return;
+                                return cy.wait(1000, { log: false }).then(() => waitForBotToFinish(elapsed + 1000));
+                            });
+
                         cy.task('logMessage', {
-                            message: 'Waiting for bot to finish speaking...',
+                            message: 'Waiting for bot to start, then finish speaking...',
                             style: 'yellow',
                         });
-                        
-                        // Poll until bot stops speaking (bot panel no longer has speaking border)
-                        const checkBotNotSpeaking = () => {
-                            return cy.get('body').then(($body) => {
-                                // Find the panel containing "Talently" text
-                                const talentlyText = $body.find('p:contains("Talently")');
-                                // Check if its parent has the speaking border
-                                const hasSpeakingBorder = talentlyText.closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
-                                
-                                if (hasSpeakingBorder) {
-                                    cy.task('logMessage', {
-                                        message: 'Bot still speaking, waiting...',
-                                        style: 'yellow',
-                                    });
-                                    return cy.wait(1000).then(() => checkBotNotSpeaking());
-                                }
-                                
-                                return cy.task('logMessage', {
+
+                        return waitForBotToStart(0)
+                            .then(() => waitForBotToFinish(0))
+                            .then(() =>
+                                cy.task('logMessage', {
                                     message: 'Bot finished speaking',
                                     style: 'green',
-                                }).then(() => trimmedQuestion);
-                            });
-                        };
-                        
-                        return checkBotNotSpeaking();
+                                }).then(() => trimmedQuestion)
+                            );
                     });
             }
         });
