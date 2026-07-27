@@ -83,9 +83,13 @@ export const selectors = {
         publishButton: '#submit-dynamic-interview', // btnLabel "Save and Publish"
         copyInterviewLinkButton: '#copy-interview-link',
 
-        // --- Wizard tab triggers (add-job/index.tsx) — Radix tabs, match by text ---
-        jobCreationTab: '[role="tab"]:contains("Job Creation")',
+        // --- Wizard tab triggers — Radix tabs, match by text ---
+        // NOTE: the add-job (creation) page uses "Job Creation"/"Customize Interview Questions";
+        // the edit-job & duplicate-job pages use "Job Details"/"Customize Questions".
+        jobCreationTab: '[role="tab"]:contains("Job Creation")',        // add-job page
+        jobDetailsTab: '[role="tab"]:contains("Job Details")',          // edit-job / duplicate-job page
         customizeQuestionsTab: '[role="tab"]:contains("Customize Interview Questions")',
+        customizeQuestionsTabEdit: '[role="tab"]:contains("Customize Questions")', // edit/duplicate page
         codingQuestionsTab: '[role="tab"]:contains("Customize Coding Questions")',
         interviewConfigTab: '[role="tab"]:contains("Interview Configuration")',
         summaryTab: '[role="tab"]:contains("Summary and Review")',
