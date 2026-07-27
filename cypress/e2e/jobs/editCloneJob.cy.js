@@ -183,4 +183,79 @@ describe('Job Edit & Clone Tests', () => {
             style: 'green',
         });
     });
+
+    /**
+     * Complete clone (duplicate) job flow, ending in a successful save (publish).
+     *
+     * WARNING: cloning CREATES A NEW real job. Step 1 "Proceed" creates it (POST /create-job),
+     * later steps update it (PATCH /job/:id), and Summary publishes it (POST /job/:id/publish),
+     * so a new published job is added to the workspace on every run. Every step advances with the
+     * shared "#submit-dynamic-interview" footer; the coding step is handled conditionally.
+     */
+    it('should complete the full clone-job flow and save (publish) successfully', () => {
+        cy.task('logMessage', {
+            message: 'Test Case: Complete clone-job flow and save successfully',
+            style: 'blue',
+        });
+
+        const backendBaseUrl = Cypress.env('backendBaseUrl');
+        cy.intercept('POST', `${backendBaseUrl}/create-job`).as('createJob');
+        cy.intercept('POST', `${backendBaseUrl}/job/*/publish`).as('publishJob');
+
+        // Open the clone form for the first job (pre-populated from the source job)
+        cy.duplicateJob(0);
+
+        // --- Step 1: Job Details — give the clone a distinct title, then Proceed (creates the job) ---
+        cy.get(selectors.jobs.jobTitleInput, { timeout: 15000 }).should('be.visible');
+        cy.get(selectors.jobs.jobTitleInput).invoke('val').then((currentTitle) => {
+            const base = String(currentTitle).replace(/\s*\(clone\)\s*$/i, '').trim();
+            const cloneTitle = `${base} (clone)`;
+
+            cy.get(selectors.jobs.jobTitleInput).clear().type(cloneTitle).should('have.value', cloneTitle);
+            cy.get(selectors.jobs.proceedButton).filter(':visible').first().click();
+
+            // Cloning creates a NEW job here — assert the create API succeeded
+            cy.wait('@createJob', { timeout: 60000 }).its('response.statusCode').should('be.oneOf', [200, 201]);
+        });
+
+        // --- Step 2: Customize Questions — advance (cloned questions are pre-filled) ---
+        cy.get(selectors.jobs.customizeQuestionsTabEdit, { timeout: 30000 })
+            .should('have.attr', 'data-state', 'active');
+        cy.get(selectors.jobs.proceedButton, { timeout: 20000 }).filter(':visible').first().click();
+
+        // The next tab is Coding (only if the job has coding) OR Interview Configuration.
+        // Wait (with retry) until one of them is active before branching.
+        const codingActiveSel = `${selectors.jobs.codingQuestionsTab}[data-state="active"]`;
+        const configActiveSel = `${selectors.jobs.interviewConfigTab}[data-state="active"]`;
+        cy.get('body', { timeout: 30000 }).should(($body) => {
+            const reached = $body.find(codingActiveSel).length + $body.find(configActiveSel).length;
+            expect(reached, 'reached coding or interview-configuration tab').to.be.greaterThan(0);
+        });
+
+        // --- Step 3 (conditional): Customize Coding Questions — advance if it's the active tab ---
+        cy.get('body').then(($body) => {
+            if ($body.find(codingActiveSel).length > 0) {
+                cy.task('logMessage', { message: 'Coding step present — advancing', style: 'gray' });
+                cy.get(selectors.jobs.proceedButton).filter(':visible').first().click();
+            }
+        });
+
+        // --- Step 4: Interview Configuration — advance ---
+        cy.get(selectors.jobs.interviewConfigTab, { timeout: 30000 })
+            .should('have.attr', 'data-state', 'active');
+        cy.get(selectors.jobs.proceedButton, { timeout: 20000 }).filter(':visible').first().click();
+
+        // --- Step 5: Summary and Review — Save and Publish ---
+        cy.get(selectors.jobs.summaryTab, { timeout: 30000 })
+            .should('have.attr', 'data-state', 'active');
+        cy.get(selectors.jobs.proceedButton, { timeout: 20000 }).filter(':visible').first().click();
+
+        // The cloned job is saved/published at the end of the flow — assert the publish API succeeded
+        cy.wait('@publishJob', { timeout: 60000 }).its('response.statusCode').should('be.oneOf', [200, 201]);
+
+        cy.task('logMessage', {
+            message: 'Clone-job flow completed and job saved (published) successfully',
+            style: 'green',
+        });
+    });
 });
