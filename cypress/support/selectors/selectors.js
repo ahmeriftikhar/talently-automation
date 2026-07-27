@@ -144,6 +144,11 @@ export const selectors = {
         devicesChecked: '#devices_checked',
         joinNowButton: '#join-now-interview',
         startInterviewButton: '#start-interview-click-candidate',
+        // Resume upload step (interview/resume-upload-form.tsx) — shown after Proceed only when the
+        // job asks for a resume (candidate_resume != null). File input is PDF-only and visually hidden.
+        resumeFileInput: '#resume',
+        resumeUploadedIndicator: 'button:contains("Upload Latest")', // appears after a successful upload
+        resumeProceedButton: '#proceed-resume-upload',
     },
     interview: {
         conversationBox: '.overflow-hidden > .text-xs',

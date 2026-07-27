@@ -66,6 +66,46 @@ Cypress.Commands.add('registerCandidateForInterview', (name, email, country, pho
     });
 });
 
+// Handle the resume-upload step (shown only when the job asks for a resume).
+// `candidateResume` is the job's `candidate_resume` field from get-job-candidate:
+//   - null/undefined  -> the job does NOT ask for a resume, so no upload step appears; continue normally.
+//   - { required: true }  -> resume is mandatory; Proceed stays disabled until a PDF is uploaded.
+//   - { required: false } -> resume is optional; still upload then continue (per requirement).
+Cypress.Commands.add('uploadCandidateResumeIfRequired', (candidateResume) => {
+    if (!candidateResume) {
+        cy.task('logMessage', {
+            message: 'Job does not ask for a resume — continuing with the normal flow',
+            style: 'gray',
+        });
+        return;
+    }
+
+    const isRequired = !!candidateResume.required;
+    cy.task('logMessage', {
+        message: `Job asks for a resume (${isRequired ? 'required' : 'optional'}) — uploading a PDF`,
+        style: 'blue',
+    });
+
+    // The resume upload form appears after the registration Proceed. Wait for its (hidden) file input.
+    cy.get(selectors.candidate.resumeFileInput, { timeout: 30000 }).should('exist');
+
+    // Upload the sample resume PDF from fixtures (input accepts application/pdf only, max 2MB).
+    cy.get(selectors.candidate.resumeFileInput).selectFile(
+        'cypress/fixtures/resume.pdf',
+        { force: true } // input is visually hidden (opacity-0 / h-0)
+    );
+
+    // Wait for the upload to finish (the "Upload Latest" control only renders after a successful upload),
+    // then Proceed past the resume step.
+    cy.get(selectors.candidate.resumeUploadedIndicator, { timeout: 60000 }).should('be.visible');
+    cy.get(selectors.candidate.resumeProceedButton, { timeout: 60000 }).should('not.be.disabled').click();
+
+    cy.task('logMessage', {
+        message: 'Resume uploaded and resume step completed',
+        style: 'green',
+    });
+});
+
 // Join and start interview
 Cypress.Commands.add('joinAndStartInterview', () => {
     cy.intercept('POST', startInterviewCall).as('startInterviewCall');
@@ -124,7 +164,6 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                 const trimmedQuestion = question.trim();
                 const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
                 if (isCompletionMessage) {
-                    cy.log('1st if statement triggered in getQuestionFromBot for completion message');
                     cy.log(isCompletionMessage);
                     return cy.task('logMessage', {
                         message: 'Completion message detected instead of a question',
@@ -148,7 +187,6 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                         const trimmedQuestion = question.trim();
                         const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
                         if (isCompletionMessage) {
-                            cy.log('1st if statement in else block triggered in getQuestionFromBot for completion message');
                             cy.log(isCompletionMessage);
                             return cy.task('logMessage', {
                                 message: 'Completion message detected instead of a question',
@@ -199,7 +237,6 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                         const trimmedQuestion = question.trim();
                         const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
                         if (isCompletionMessage) {
-                            cy.log('else statement in else blocktriggered in getQuestionFromBot for completion message');
                             cy.log(isCompletionMessage);
                             return cy.task('logMessage', {
                                 message: 'Completion message detected instead of a question',
@@ -394,9 +431,11 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
         const jobTitle = interviewData.title;
         const yearsOfExp = interviewData.yearsOfExperience;
         const companyId = interviewData.companyId;
-        
+        // Resume requirement configured on the job: null => not asked; { required } => asked.
+        const candidateResume = interviewData.candidate_resume;
+
         cy.task('logMessage', {
-            message: `Job Details - Title: ${jobTitle}, Duration: ${interviewDuration}`,
+            message: `Job Details - Title: ${jobTitle}, Duration: ${interviewDuration}, Resume: ${candidateResume ? (candidateResume.required ? 'required' : 'optional') : 'not asked'}`,
             style: 'gray',
         });
         
@@ -409,6 +448,10 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
             cy.registerCandidateForInterview(randomName, randomEmail, 'United States', '1234567890', jobId);
             
             cy.get('@userData').then(({ userId }) => {
+                // If the job asks for a resume (required/optional), upload one before continuing;
+                // otherwise this is a no-op and the normal flow proceeds.
+                cy.uploadCandidateResumeIfRequired(candidateResume);
+
                 // Join and start interview
                 cy.joinAndStartInterview();
                 
