@@ -249,6 +249,8 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
 
 // Generate answer using API
 Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId, sid) => {
+    cy.handleInactivityModal();
+    cy.handleTerminationBox();
     const formattedMessage = question.replace(/\s+/g, ' ').trim();
     
     cy.task('logMessage', {
@@ -285,6 +287,8 @@ Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId, sid) =>
 
 // Send answer using API
 Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, interviewDuration) => {
+    cy.handleInactivityModal();
+    cy.handleTerminationBox();
     const user_message_start_timestamp = new Date().toUTCString();
     
     const requestBody = {

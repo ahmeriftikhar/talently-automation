@@ -2,7 +2,11 @@ const { defineConfig } = require("cypress");
 const { cypressBrowserPermissionsPlugin } = require('cypress-browser-permissions');
 const fs = require('fs');
 
-const localEnvPath = 'cypress.env.json';
+const localEnvPath = process.env.ENVIRONMENT === 'prod'
+    ? 'cypress.env.prod.json'
+    : 'cypress.env.json';
+
+// const localEnvPath = 'cypress.env.json';
 const localEnv = fs.existsSync(localEnvPath)
     ? JSON.parse(fs.readFileSync(localEnvPath, 'utf8'))
     : {};
@@ -45,6 +49,16 @@ module.exports = defineConfig({
             cleanupMode: envValue('cleanupMode', 'archive'),
         },
         setupNodeEvents(on, config) {
+            // Prod/dev env values must win over Cypress's auto-loaded cypress.env.json
+            Object.assign(config.env, {
+                environment,
+                frontendBaseUrl,
+                backendBaseUrl,
+                companyEmail: envValue('companyEmail'),
+                companyPassword: envValue('companyPassword'),
+                workspaceName: envValue('workspaceName'),
+                cleanupMode: envValue('cleanupMode', 'archive'),
+            });
             config = cypressBrowserPermissionsPlugin(on, config);
             on('before:browser:launch', (browser, launchOptions) => {
                 // Check if the browser is Chromium (such as Chrome or Edge)
@@ -95,6 +109,8 @@ module.exports = defineConfig({
                     return null;
                 },
             });
+
+            return config;
         },
     },
 });
