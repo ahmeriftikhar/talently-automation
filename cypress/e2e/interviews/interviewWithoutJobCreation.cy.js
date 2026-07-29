@@ -22,7 +22,7 @@ describe('Interview Without Job Creation Tests', () => {
         const interviewLink = Cypress.env('interviewLink')
             || (Cypress.env('environment') === 'prod'
                 ? 'https://interview.talently.ai/interview/6a6738c31bdf087868ae802c'
-                : 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a676742ddb7cb39e75ff64f');        
+                : 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a6a074157cebb557500737c');        
                 cy.task('logMessage', {
                     message: `Using interview link: ${interviewLink}`,
                     style: 'gray',
