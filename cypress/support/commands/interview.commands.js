@@ -110,9 +110,9 @@ Cypress.Commands.add('uploadCandidateResumeIfRequired', (candidateResume) => {
 Cypress.Commands.add('joinAndStartInterview', () => {
     cy.intercept('POST', startInterviewCall).as('startInterviewCall');
     cy.intercept('POST', textToSpeechCall).as('textToSpeechCall');
-    
+
     cy.clickJoinNowButton();
-    
+
     cy.wait('@startInterviewCall').then((interception) => {
         const callId = interception.request.body.callId;
         cy.wrap({ callId }).as('callData');
@@ -121,7 +121,7 @@ Cypress.Commands.add('joinAndStartInterview', () => {
             style: 'green',
         });
     });
-    
+
     // Wait for screen sharing modal and counter using element-based wait
     cy.clickStartInterviewButton();
 });
@@ -150,166 +150,71 @@ Cypress.Commands.add('handleTerminationBox', () => {
     });
 });
 
-// Get question from conversation box
+// Get the current question from the transcript.
+// The transcript interleaves bot questions AND user answers, so positional indexing drifts as the
+// chat grows. Instead: wait for the bot to START then FINISH speaking, then read the LAST (newest)
+// transcript message — which is the question the bot just finished asking. This is robust regardless
+// of how many prior messages exist and avoids empty/garbled reads.
 Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
     cy.handleInactivityModal();
     cy.handleTerminationBox();
-    // Wait for conversation box to be available using element-based wait
     cy.get(selectors.interview.conversationBox, { timeout: 15000 }).should('exist');
-    if (questionIndex == 0) {
-        // Dynamically wait for the bot to START and then FINISH speaking the first question,
-        // instead of a fixed cy.wait. The bot panel (the one with the "Talently" label) carries the
-        // ring class `border-4 border-[#00BBF9]` while it is speaking. Waiting for it to start first
-        // avoids reading/answering before the bot has begun — the race that got stuck.
-        const isBotSpeaking = ($body) =>
-            $body.find('p:contains("Talently")').closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
 
-        const waitForBotToStart = (elapsed) =>
-            cy.get('body', { log: false }).then(($body) => {
-                if (isBotSpeaking($body) || elapsed >= 30000) return;
-                return cy.wait(1000, { log: false }).then(() => waitForBotToStart(elapsed + 1000));
-            });
+    // Bot panel (the one with the "Talently" label) carries the ring class `border-4 border-[#00BBF9]`
+    // while the bot is speaking.
+    const isBotSpeaking = ($b) =>
+        $b.find('p:contains("Talently")').closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
 
-        const waitForBotToFinish = (elapsed) =>
-            cy.get('body', { log: false }).then(($body) => {
-                if (!isBotSpeaking($body) || elapsed >= 180000) return;
-                return cy.wait(1000, { log: false }).then(() => waitForBotToFinish(elapsed + 1000));
-            });
-
-        return waitForBotToStart(0)
-            .then(() => waitForBotToFinish(0))
-            .then(() =>
-                cy.get(`:nth-child(1) > ${selectors.interview.conversationBox}`)
-                    .invoke('text')
-                    .then((question) => {
-                        const trimmedQuestion = question.trim();
-                        const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
-                        if (isCompletionMessage) {
-                            cy.log(isCompletionMessage);
-                            return cy.task('logMessage', {
-                                message: 'Completion message detected instead of a question',
-                                style: 'green',
-                            }).then(() => null);
-                        }
-                        return cy.task('logMessage', {
-                            message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
-                            style: 'gray',
-                        }).then(() => trimmedQuestion);
-                    })
-            );
-    } else {
-        // Try multiple selector approaches for conversation box
-        return cy.get('body').then(($body) => {
-            // Try the nth-child approach first
-            const childIndex = (questionIndex + 1) * 2 - 1;
-            if ($body.find(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`).length > 0) {
-                return cy.get(`:nth-child(${childIndex}) > ${selectors.interview.conversationBox}`)
-                    .invoke('text')
-                    .then((question) => {
-                        const trimmedQuestion = question.trim();
-                        const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
-                        if (isCompletionMessage) {
-                            cy.log(isCompletionMessage);
-                            return cy.task('logMessage', {
-                                message: 'Completion message detected instead of a question',
-                                style: 'green',
-                            }).then(() => null);
-                        }
-                        cy.task('logMessage', {
-                            message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
-                            style: 'gray',
-                        });
-                        
-                        // Wait for the bot to START speaking, then wait for it to FINISH, before
-                        // answering. Polling only for "not speaking" races the audio: right after the
-                        // question text appears the bot has not begun speaking yet, so the ring is
-                        // absent and we'd wrongly conclude it finished — the answer then overrides the
-                        // bot's speech and the interview gets messed up.
-                        const isBotSpeaking = ($body) =>
-                            $body.find('p:contains("Talently")').closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
-
-                        const waitForBotToStart = (elapsed) =>
-                            cy.get('body', { log: false }).then(($b) => {
-                                if (isBotSpeaking($b) || elapsed >= 30000) return;
-                                return cy.wait(1000, { log: false }).then(() => waitForBotToStart(elapsed + 1000));
-                            });
-
-                        const waitForBotToFinish = (elapsed) =>
-                            cy.get('body', { log: false }).then(($b) => {
-                                if (!isBotSpeaking($b) || elapsed >= 180000) return;
-                                return cy.wait(1000, { log: false }).then(() => waitForBotToFinish(elapsed + 1000));
-                            });
-
-                        cy.task('logMessage', {
-                            message: 'Waiting for bot to start, then finish speaking...',
-                            style: 'yellow',
-                        });
-
-                        return waitForBotToStart(0)
-                            .then(() => waitForBotToFinish(0))
-                            .then(() =>
-                                cy.task('logMessage', {
-                                    message: 'Bot finished speaking',
-                                    style: 'green',
-                                }).then(() => trimmedQuestion)
-                            );
-                    });
-            } else {
-                // Fallback to getting all conversation elements and picking the right one
-                return cy.get(selectors.interview.conversationBox).eq(questionIndex)
-                    .invoke('text')
-                    .then((question) => {
-                        const trimmedQuestion = question.trim();
-                        const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
-                        if (isCompletionMessage) {
-                            cy.log(isCompletionMessage);
-                            return cy.task('logMessage', {
-                                message: 'Completion message detected instead of a question',
-                                style: 'green',
-                            }).then(() => null);
-                        }
-                        cy.task('logMessage', {
-                            message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
-                            style: 'gray',
-                        });
-                        
-                        // Wait for the bot to START speaking, then wait for it to FINISH, before
-                        // answering. Polling only for "not speaking" races the audio: right after the
-                        // question text appears the bot has not begun speaking yet, so the ring is
-                        // absent and we'd wrongly conclude it finished — the answer then overrides the
-                        // bot's speech and the interview gets messed up.
-                        const isBotSpeaking = ($body) =>
-                            $body.find('p:contains("Talently")').closest('.border-4.border-\\[\\#00BBF9\\]').length > 0;
-
-                        const waitForBotToStart = (elapsed) =>
-                            cy.get('body', { log: false }).then(($b) => {
-                                if (isBotSpeaking($b) || elapsed >= 30000) return;
-                                return cy.wait(1000, { log: false }).then(() => waitForBotToStart(elapsed + 1000));
-                            });
-
-                        const waitForBotToFinish = (elapsed) =>
-                            cy.get('body', { log: false }).then(($b) => {
-                                if (!isBotSpeaking($b) || elapsed >= 180000) return;
-                                return cy.wait(1000, { log: false }).then(() => waitForBotToFinish(elapsed + 1000));
-                            });
-
-                        cy.task('logMessage', {
-                            message: 'Waiting for bot to start, then finish speaking...',
-                            style: 'yellow',
-                        });
-
-                        return waitForBotToStart(0)
-                            .then(() => waitForBotToFinish(0))
-                            .then(() =>
-                                cy.task('logMessage', {
-                                    message: 'Bot finished speaking',
-                                    style: 'green',
-                                }).then(() => trimmedQuestion)
-                            );
-                    });
-            }
+    // Wait for the bot to start speaking first (so we don't read/answer before it has begun — the race),
+    // then wait for it to finish. Both are soft-bounded so they never hang.
+    const waitForBotToStart = (elapsed) =>
+        cy.get('body', { log: false }).then(($b) => {
+            if (isBotSpeaking($b) || elapsed >= 30000) return;
+            return cy.wait(1000, { log: false }).then(() => waitForBotToStart(elapsed + 1000));
         });
-    }
+
+    const waitForBotToFinish = (elapsed) =>
+        cy.get('body', { log: false }).then(($b) => {
+            if (!isBotSpeaking($b) || elapsed >= 180000) return;
+            return cy.wait(1000, { log: false }).then(() => waitForBotToFinish(elapsed + 1000));
+        });
+
+    cy.task('logMessage', {
+        message: 'Waiting for bot to start, then finish speaking...',
+        style: 'yellow',
+    });
+
+    // Read the LATEST BOT message. In the transcript, bot bubbles use bg-[#5B5048] while candidate
+    // bubbles use bg-[#3DCFFF]; plain `.last()` on the shared text selector can land on the candidate's
+    // answer or an empty node, which sends an empty question ("please send the question"). So prefer the
+    // last bot bubble, falling back to the last transcript message only if the bot class isn't found.
+    const botBubbleSelector = '[class*="5B5048"]';
+
+    return waitForBotToStart(0)
+        .then(() => waitForBotToFinish(0))
+        .then(() => cy.get('body'))
+        .then(($body) => {
+            const target = $body.find(botBubbleSelector).length > 0
+                ? botBubbleSelector
+                : selectors.interview.conversationBox;
+            return cy.get(target)
+                .last()
+                .invoke('text')
+                .then((question) => {
+                    const trimmedQuestion = question.trim();
+                    const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
+                    if (isCompletionMessage) {
+                        return cy.task('logMessage', {
+                            message: 'Completion message detected instead of a question',
+                            style: 'green',
+                        }).then(() => null);
+                    }
+                    return cy.task('logMessage', {
+                        message: `Question ${questionIndex + 1}: ${trimmedQuestion}`,
+                        style: 'gray',
+                    }).then(() => trimmedQuestion);
+                });
+        });
 });
 
 // Generate answer using API
@@ -317,12 +222,12 @@ Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId, sid) =>
     cy.handleInactivityModal();
     cy.handleTerminationBox();
     const formattedMessage = question.replace(/\s+/g, ' ').trim();
-    
+
     cy.task('logMessage', {
         message: `Generating answer for: ${formattedMessage}...`,
         style: 'blue',
     });
-    
+
     return cy.request({
         method: 'POST',
         url: generateAnswerEndpoint(jobId),
@@ -355,7 +260,7 @@ Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, inter
     cy.handleInactivityModal();
     cy.handleTerminationBox();
     const user_message_start_timestamp = new Date().toUTCString();
-    
+
     const requestBody = {
         sid: sid,
         userMessage: answer,
@@ -367,12 +272,12 @@ Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, inter
         companyId: 'dynamic',
         user_message_start_timestamp: user_message_start_timestamp
     };
-    
+
     cy.task('logMessage', {
         message: `Sending answer: ${answer}...`,
         style: 'blue',
     });
-    
+
     return cy.request({
         method: 'POST',
         url: interviewCallEndpoint,
@@ -402,7 +307,7 @@ Cypress.Commands.add('isInterviewCompleted', () => {
         if (isOnFeedbackPage) {
             return true;
         }
-        
+
         return cy.get('body').then(($body) => {
             const html = $body.html();
             const hasCompletionMessage = html.includes(selectors.interview.completedMessage);
@@ -414,15 +319,15 @@ Cypress.Commands.add('isInterviewCompleted', () => {
 // Wait for interview completion
 Cypress.Commands.add('waitForInterviewCompletion', (timeout = 2400000) => {
     cy.intercept('GET', interviewCompletedCall).as('interviewCompletedCall');
-    
+
     cy.log('Waiting for interview to complete...');
     cy.task('logMessage', {
         message: 'Waiting for interview completion (max 40 minutes)',
         style: 'gray',
     });
-    
+
     cy.wait('@interviewCompletedCall', { timeout: timeout }).its('response.statusCode').should('eq', 200);
-    
+
     cy.task('logMessage', {
         message: 'Interview completed successfully',
         style: 'green',
@@ -435,22 +340,22 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
     const currentTime = new Date().toISOString().slice(11, 19);
     const filename = `interviewReportWithoutJobCreation_${currentDate}_${currentTime}.json`;
     const filepath = `cypress/fixtures/interviewReports/${filename}`;
-    
+
     // Generate random user data with shorter names
     const randomName = faker.person.firstName();
     const randomEmail = faker.internet.email({ firstName: randomName }).toLowerCase();
-    
+
     cy.task('logMessage', {
         message: `Starting interview without job creation for link: ${interviewLink}`,
         style: 'blue',
     });
-    
+
     // Visit interview link and intercept job candidate call
     cy.intercept('GET', getJobCandidateCall).as('getJobCandidateCall');
     cy.visit(interviewLink);
     cy.handleCookieConsent();
 
-    
+
     cy.wait('@getJobCandidateCall').then((interception) => {
         const interviewData = interception.response.body;
         const interviewType = interviewData.interviewType;
@@ -466,15 +371,15 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
             message: `Job Details - Title: ${jobTitle}, Duration: ${interviewDuration}, Resume: ${candidateResume ? (candidateResume.required ? 'required' : 'optional') : 'not asked'}`,
             style: 'gray',
         });
-        
+
         // Extract job ID from URL
         cy.url().then((url) => {
             const jobId = url.match(/\/interview\/(.+)$/)[1];
             cy.wrap(jobId).as('jobId');
-            
+
             // Register candidate
             cy.registerCandidateForInterview(randomName, randomEmail, 'United States', '1234567890', jobId);
-            
+
             cy.get('@userData').then(({ userId }) => {
                 // If the job asks for a resume (required/optional), upload one before continuing;
                 // otherwise this is a no-op and the normal flow proceeds.
@@ -482,15 +387,15 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
 
                 // Join and start interview
                 cy.joinAndStartInterview();
-                
+
                 cy.get('@callData').then(({ callId }) => {
                     // Wait for initial message using element-based wait
                     cy.get(selectors.interview.conversationBox, { timeout: 30000 }).should('exist');
-                    
+
                     // Get session storage sid using window directly
                     cy.window().then((win) => {
                         const sid = win.sessionStorage.getItem('sid') || 'default-sid';
-                        
+
                         // Create initial JSON data
                         const jsonData = {
                             jobTitle: jobTitle,
@@ -508,19 +413,19 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                             sid: sid,
                             questionsAndAnswers: []
                         };
-                        
+
                         cy.writeFile(filepath, jsonData);
-                        
+
                         // Dynamic question handling - use a Cypress-friendly approach
                         cy.task('logMessage', {
                             message: 'Starting dynamic question loop (interview will complete naturally)',
                             style: 'green',
                         });
-                        
+
                         // Use a while loop with Cypress retry logic
                         let questionIndex = 0;
                         const maxQuestions = 50; // Safety limit
-                        
+
                         const processQuestions = () => {
                             if (questionIndex >= maxQuestions) {
                                 cy.task('logMessage', {
@@ -529,7 +434,7 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                 });
                                 return;
                             }
-                            
+
                             // Check if interview is completed
                             cy.isInterviewCompleted().then((completed) => {
                                 if (completed) {
@@ -537,14 +442,14 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                         message: 'Interview completion detected',
                                         style: 'green',
                                     });
-                                    
+
                                     // Capture final state before redirect
                                     cy.readFile(filepath).then((data) => {
                                         data.completedAt = new Date().toISOString();
                                         data.finalQuestionIndex = questionIndex;
                                         cy.writeFile(filepath, data);
                                     });
-                                    
+
                                     // Wait for redirect to feedback page
                                     cy.url({ timeout: 30000 }).should('include', 'feedback').then(() => {
                                         cy.task('logMessage', {
@@ -554,7 +459,7 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                     });
                                     return;
                                 }
-                                
+
                                 // Get next question (with built-in text stabilization)
                                 cy.getQuestionFromBot(questionIndex).then((question) => {
                                     if (question === null) {
@@ -580,10 +485,10 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                 });
                             });
                         };
-                        
+
                         // Start the question loop
                         processQuestions();
-                        
+
                         // Wait for interview completion
                         cy.waitForInterviewCompletion();
                     });
