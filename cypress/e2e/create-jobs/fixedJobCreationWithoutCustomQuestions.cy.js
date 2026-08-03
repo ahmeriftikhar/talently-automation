@@ -83,6 +83,33 @@ describe('Fixed Job Creation Without Custom Question Tests', () => {
         });
     });
 
+    it('should validate required fields in job creation', () => {
+        cy.task('logMessage', {
+            message: 'Test Case: Should validate required fields in job creation',
+            style: 'blue',
+        });
+
+        // Login as company user
+        cy.loginAsAutomationCompany();
+
+        // Navigate to jobs page
+        cy.navigateToJobsPage();
+
+        // Open fixed job creation
+        cy.openFixedJobCreation();
+
+        // Try to submit without filling required fields
+        cy.get(selectors.jobs.proceedButton).click();
+
+        // Verify validation errors are shown
+        cy.get('.text-xs.text-red-500').should('be.visible');
+
+        cy.task('logMessage', {
+            message: 'Required field validation working correctly',
+            style: 'green',
+        });
+    });
+
     // it('should create a fixed job with different location types', () => {
     //     cy.task('logMessage', {
     //         message: 'Test Case: Should create a fixed job with different location types',
