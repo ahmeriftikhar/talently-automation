@@ -134,6 +134,70 @@ export const selectors = {
         deleteConfirmInput: '.fixed.inset-0 input[type="text"]',
         deleteConfirmButton: '.fixed.inset-0 button:contains("Confirm")',
     },
+    // Dynamic job creation wizard (/dynamic-interview) — a SEPARATE flow from fixed job creation.
+    // Steps: Job Details -> Configure Skillset (AI-generated) -> [Coding, if enabled] ->
+    // Interview Configuration -> Summary. The footer Proceed/Publish button id
+    // (#submit-dynamic-interview) is REUSED on every step, so scope by the active step's heading.
+    dynamicJob: {
+        // --- Entry: create-job-option-modal chooser card ---
+        dynamicQuestionsOption: 'h5:contains("Dynamic questions")',
+
+        // --- Step 1: Job Details (dynamic-interview/job-details.tsx) ---
+        // Title placeholder uses curly quotes — match a stable substring only.
+        jobTitleInput: 'input[placeholder*="Senior Software Developer"]',
+        jobDescriptionEditor: '[contenteditable="true"]', // react-rte editor, NOT a textarea
+        jobLocationRemote: '#location_remote',
+        jobLocationHybrid: '#location_hybrid',
+        jobLocationOnsite: '#location_onsite',
+        // Radix Select (common/select/select.tsx): trigger has .select-trigger-btn, options role=option
+        jobTypeSelect: 'button.select-trigger-btn:contains("Select Job Type")',
+        // Language SelectDropdown defaults to "English"; only touch it if a non-default is needed.
+        interviewLanguageSelect: 'button.select-trigger-btn:contains("English")',
+        selectOption: '[role="option"]',
+        askForResumeCheckbox: '#c1',
+        resumeRequired: '#resume_required',
+        resumeOptional: '#resume_optional',
+        liveCodingCheckbox: '#c2', // only present when NEXT_PUBLIC_CODING_INTERVIEW_ENABLED === 'true'
+
+        // --- Footer (shared on every step) ---
+        proceedButton: '#submit-dynamic-interview', // "Proceed" / "Save and Publish"
+        saveDraftButton: '#job-save-draft',
+
+        // --- Skill generation (async) + Configure Skillset (configure-skillset.tsx) ---
+        generatedSkillsHeading: 'h3:contains("Generated Skill Sets")',
+        skillTopicToggle: '#job-topic-update',          // topic chip (multiple; scope to open accordion)
+        addSkillTopicButton: '#add-job-skill-topic',     // "+" opens the topic input
+        addSkillTopicInput: 'input[placeholder="Enter topic"]',
+        confirmSkillTopicButton: '#add-skill-topic',     // checkmark to confirm the topic
+        selectTopicError: 'p.text-xs.text-red-500',      // "*Please select at least one topic"
+
+        // --- Basic Instructions (configure-skill-set-form.tsx) — all optional ---
+        expectationsTextarea: 'textarea[placeholder*="Effective communicator"]',
+        redFlagsTextarea: 'textarea[placeholder*="buzz words"]',
+        customInstructionsTextarea: 'textarea[placeholder*="custom instructions"]',
+
+        // --- Customize Questions section (embedded in the skillset step) ---
+        addQuestionButton: '#add-interview-question',
+        questionInput: 'input[placeholder="Enter question"], textarea[placeholder="Enter question"]',
+        deleteQuestionButton: '#delete-single-question',
+
+        // --- Coding step (create-coding-questions.tsx) — conditional ---
+        codingHeading: 'h3:contains("Customize Coding Questions")',
+        addCodingQuestionButton: '#add-interview-question',
+
+        // --- Interview Configuration (shared with fixed flow) ---
+        transcriptionToggle: 'button[role="switch"]',
+        basicEngine: '#engine_basic',
+        proEngine: '#engine_advance',
+
+        // --- Summary / publish + published modal (on /job-post/[id]) ---
+        publishButton: '#submit-dynamic-interview', // labeled "Save and Publish"
+        publishedModalTitle: ':contains("Job Published Successfully")',
+        copyInterviewLinkButton: '#copy-interview-link',
+
+        // --- Validation (any step) ---
+        validationError: '.text-red-500',
+    },
     candidate: {
         nameInput: '[data-cy="candidate-name-input"], [placeholder="Name"], [placeholder="Enter name"]',
         emailInput: '[data-cy="candidate-email-input"], [placeholder="Email"], [placeholder="Enter email"]',
