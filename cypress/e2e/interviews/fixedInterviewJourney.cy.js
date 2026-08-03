@@ -115,8 +115,15 @@ describe('Fixed Interview Journey (custom questions, no coding)', () => {
                 style: 'green',
             });
 
-            // Conduct the interview on the freshly published link
+            // Reset the browser state so the candidate flow starts fresh. Without this, the same
+            // (company) session carries over and the interview link skips candidate registration —
+            // jumping straight to the resume screen — which breaks the candidate flow.
             cy.get('@candidateInterviewLink').then((interviewLink) => {
+                cy.clearCookies();
+                cy.clearLocalStorage();
+                cy.clearAllSessionStorage();
+
+                // Conduct the interview on the freshly published link as a brand-new candidate
                 cy.interviewWithoutJobCreation(interviewLink);
             });
 
