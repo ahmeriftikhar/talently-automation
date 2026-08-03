@@ -107,6 +107,93 @@ Cypress.Commands.add('addSkillTopic', (topic) => {
     cy.get(selectors.dynamicJob.confirmSkillTopicButton).click();
 });
 
+// --- Skill-topic selection helpers -----------------------------------------------------------
+// Topics live in per-skill accordions (Radix type="single" — only the OPEN skill's topics are in
+// the DOM; collapsed skills keep their selections but aren't rendered). A SELECTED topic button
+// (#job-topic-update) is wrapped by a `.gradient-bg-fixed` element (GradientBorder applyGradient);
+// an unselected one is not. So to touch every skill we must expand each accordion in turn.
+
+const isTopicSelected = (btn) => !!btn.closest('.gradient-bg-fixed');
+
+// Expand the skill accordion at index `i` and WAIT until it is actually open. This is the crucial
+// fix: previously we only checked that *some* topic existed (true even when skill i never opened),
+// so skills 1..N were never processed. Radix sets data-state="open" on the active trigger; assert it.
+const expandSkill = (i) => {
+    cy.get(selectors.dynamicJob.skillAccordionTrigger).eq(i).then(($t) => {
+        if ($t.attr('data-state') !== 'open') cy.wrap($t).click();
+    });
+    // Confirm THIS skill's accordion is open before touching its topics.
+    cy.get(selectors.dynamicJob.skillAccordionTrigger).eq(i, { timeout: 10000 })
+        .should('have.attr', 'data-state', 'open');
+    cy.get(selectors.dynamicJob.skillTopicToggle, { timeout: 10000 }).should('have.length.greaterThan', 0);
+};
+
+// Deselect EVERY selected topic across ALL skills, except one whose text matches `keepText`
+// (the manually-added custom topic). Iterates each skill accordion.
+Cypress.Commands.add('deselectAllSkillTopics', (keepText = '') => {
+    cy.get(selectors.dynamicJob.skillAccordionTrigger).its('length').then((skillCount) => {
+        cy.task('logMessage', { message: `Deselecting topics across ${skillCount} skills (keep: "${keepText}")`, style: 'gray' });
+
+        Cypress._.times(skillCount, (i) => {
+            expandSkill(i);
+
+            const deselectStep = (guard) => {
+                if (guard <= 0) return;
+                cy.get('body').then(($b) => {
+                    const selected = [...$b.find(selectors.dynamicJob.skillTopicToggle)].filter(isTopicSelected);
+                    const target = selected.find((btn) => !(keepText && btn.textContent.includes(keepText)));
+                    if (!target) return; // nothing left to deselect in this skill
+                    cy.wrap(target).click({ force: true });
+                    // retryably confirm it deselected (wrapper lost the gradient class)
+                    cy.wrap(target).parents('.gradient-bg-fixed').should('not.exist');
+                    deselectStep(guard - 1);
+                });
+            };
+            deselectStep(25);
+        });
+    });
+});
+
+// Select `count` topics spread across DISTINCT random skills (one topic per chosen skill).
+// If there are fewer skills than `count`, remaining picks fall on random skills (may repeat).
+Cypress.Commands.add('selectRandomSkillTopics', (count = 3) => {
+    cy.get(selectors.dynamicJob.skillAccordionTrigger).its('length').then((skillCount) => {
+        const distinct = Cypress._.sampleSize(Cypress._.range(skillCount), Math.min(count, skillCount));
+        const indices = [...distinct];
+        while (indices.length < count) indices.push(Math.floor(Math.random() * skillCount));
+
+        cy.task('logMessage', { message: `Selecting ${count} topics from skills [${indices.join(', ')}]`, style: 'gray' });
+
+        indices.forEach((skillIdx) => {
+            expandSkill(skillIdx);
+            cy.get('body').then(($b) => {
+                const unselected = [...$b.find(selectors.dynamicJob.skillTopicToggle)].filter((btn) => !isTopicSelected(btn));
+                if (unselected.length === 0) {
+                    cy.task('logMessage', { message: `Skill ${skillIdx}: no unselected topic available`, style: 'yellow' });
+                    return;
+                }
+                const pick = unselected[Math.floor(Math.random() * unselected.length)];
+                cy.wrap(pick).click({ force: true });
+                // retryably confirm it selected (wrapper gained the gradient class)
+                cy.wrap(pick).parents('.gradient-bg-fixed').should('exist');
+            });
+        });
+    });
+});
+
+// Assert the TOTAL number of selected topics across ALL skills. Each accordion trigger renders
+// "{n} Topic(s) Selected", so sum those counts (works even for collapsed skills). Retries until stable.
+Cypress.Commands.add('verifyTotalSelectedTopics', (expected) => {
+    cy.get(selectors.dynamicJob.skillAccordionTrigger).should(($triggers) => {
+        const total = [...$triggers].reduce((sum, t) => {
+            const m = (t.textContent || '').match(/(\d+)\s+Topic/);
+            return sum + (m ? parseInt(m[1], 10) : 0);
+        }, 0);
+        expect(total, 'total selected topics across all skills').to.equal(expected);
+    });
+    cy.task('logMessage', { message: `Verified total selected topics = ${expected}`, style: 'green' });
+});
+
 // Fill the optional Basic Instructions textareas. `instructions`: { expectations, redFlags, customInstructions }.
 Cypress.Commands.add('fillBasicInstructions', (instructions = {}) => {
     cy.log('Filling basic instructions');

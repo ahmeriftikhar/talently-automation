@@ -165,7 +165,13 @@ export const selectors = {
 
         // --- Skill generation (async) + Configure Skillset (configure-skillset.tsx) ---
         generatedSkillsHeading: 'h3:contains("Generated Skill Sets")',
-        skillTopicToggle: '#job-topic-update',          // topic chip (multiple; scope to open accordion)
+        // Per-skill accordion trigger (Radix, type="single"). No id; every trigger renders
+        // "{n} Topic(s) Selected", so match by that text. Has data-state/aria-expanded for open/closed.
+        skillAccordionTrigger: 'button:contains("Topics Selected"), button:contains("Topic Selected")',
+        // Topic chips share a DUPLICATE id="job-topic-update". Use an ATTRIBUTE selector, NOT '#id':
+        // jQuery/Sizzle optimizes '#id' to getElementById() and returns only the FIRST match, so
+        // '#job-topic-update' would see just one topic per skill. '[id="..."]' returns them all.
+        skillTopicToggle: '[id="job-topic-update"]',
         addSkillTopicButton: '#add-job-skill-topic',     // "+" opens the topic input
         addSkillTopicInput: 'input[placeholder="Enter topic"]',
         confirmSkillTopicButton: '#add-skill-topic',     // checkmark to confirm the topic
