@@ -53,7 +53,7 @@ describe('Dynamic Job Creation Tests', () => {
         });
     });
 
-    it.only('should create a dynamic job with a custom skill topic, basic instructions and custom questions', () => {
+    it('should create a dynamic job with a custom skill topic, basic instructions and custom questions', () => {
         cy.task('logMessage', { message: 'Test Case: dynamic job with custom topic, instructions & questions', style: 'blue' });
 
         cy.openDynamicJobCreation();
