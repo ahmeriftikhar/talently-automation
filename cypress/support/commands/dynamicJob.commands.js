@@ -91,11 +91,19 @@ Cypress.Commands.add('ensureSkillTopicSelected', () => {
 });
 
 // Add a custom topic to the currently open skill accordion.
+// APP BUG: the confirm control is <button type="submit" onClick={handleUpdate}> inside a <form>
+// with NO onSubmit/preventDefault. handleUpdate DOES add the topic, but the button also triggers a
+// NATIVE form submit -> full page reload, which discards it (both tick-click and Enter hit this).
+// Workaround: attach a submit listener that preventDefault()s the native submit, so the onClick's
+// topic add survives without the reload.
 Cypress.Commands.add('addSkillTopic', (topic) => {
     cy.log(`Adding skill topic: ${topic}`);
     cy.get(selectors.dynamicJob.addSkillTopicButton, { timeout: 10000 }).first().click();
-    // Type then immediately confirm — the input auto-closes on outside click / Esc.
     cy.get(selectors.dynamicJob.addSkillTopicInput, { timeout: 10000 }).type(topic);
+    // Suppress the native form submit (the reload bug) while keeping the button's onClick add.
+    cy.get(selectors.dynamicJob.addSkillTopicInput)
+        .closest('form')
+        .then(($form) => { $form.on('submit', (e) => e.preventDefault()); });
     cy.get(selectors.dynamicJob.confirmSkillTopicButton).click();
 });
 
@@ -116,8 +124,8 @@ Cypress.Commands.add('fillBasicInstructions', (instructions = {}) => {
 // Add a custom (must-ask) question in the skillset step's Customize Questions section.
 Cypress.Commands.add('addDynamicCustomQuestion', (question) => {
     cy.log(`Adding dynamic custom question: ${question}`);
-    cy.get(selectors.dynamicJob.addQuestionButton).click();
     cy.get(selectors.dynamicJob.questionInput).last().clear().type(question);
+    cy.get(selectors.dynamicJob.addQuestionButton).click();
 });
 
 // Proceed to the next dynamic step (Skillset/Coding/Config -> next). Waits for the PATCH /job save.
