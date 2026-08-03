@@ -177,7 +177,7 @@ export const selectors = {
         customInstructionsTextarea: 'textarea[placeholder*="custom instructions"]',
 
         // --- Customize Questions section (embedded in the skillset step) ---
-        addQuestionButton: '#add-interview-question',
+        addQuestionButton: '#add-interview-question, button:contains("Add another"), button:contains("Add Question")',
         questionInput: 'input[placeholder="Enter question"], textarea[placeholder="Enter question"]',
         deleteQuestionButton: '#delete-single-question',
 
@@ -228,5 +228,29 @@ export const selectors = {
         completedMessage: 'Interview is completed',
         readyMessage: 'Are you ready to begin?',
         botPanel: 'p:contains("Talently").parent().parent().border-4.border-\\[\\#00BBF9\\]', // Bot panel with speaking indicator
+    },
+    // Mock interview flow (home hero -> /mock-interview/interview). Verified against interview-ai/frontend;
+    // notes mark where a legacy selector was stale.
+    mock: {
+        startPracticingBtn: '#mock-start-practicing', // home "Try AI Interview" / landing "Start Practicing for Free!"
+        bookADemoBtn: '#book-demo', // home hero only (opens a calendar; does NOT navigate)
+        // Job information stage
+        proceedBtn: '#mock-submit-interview', // "Proceed"
+        createCustomBtn: '#mock-start-customisation-step2', // "Create my custom interview" (legacy #mock-start-customisation is stale)
+        jobTitleInput: 'input[name="job_title"]',
+        jobDescriptionEditor: '.public-DraftEditor-content', // react-rte / Draft.js contenteditable (legacy .notranslate was generic)
+        selectTrigger: 'button.select-trigger-btn', // Radix Select trigger (roles / duration / language)
+        selectOption: '[role="option"]',
+        // User information stage
+        userNameInput: 'input[name="user_name"]',
+        userEmailInput: 'input[name="user_email"]',
+        startInterviewStep1Btn: '#mock-start-interview-step1', // "Start interview" (disabled until mic+cam active)
+        // In-call
+        inCallStartBtn: '#mock-start-interview', // "Start Interview"
+        resumeBtn: '#resume-interview', // inactivity modal "Resume Interview"
+        errorMsg: 'span.text-xs.text-red-500',
+        // Transcript bot bubble (bg-[#5B5048]) — same as the regular interview transcript
+        botBubble: '[class*="5B5048"]',
+        conversationBox: '.overflow-hidden > .text-xs',
     },
 };

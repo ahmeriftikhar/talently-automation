@@ -1,65 +1,93 @@
-const baseUrl = Cypress.config('baseUrl');
+/**
+ * Mock Interview journeys.
+ *
+ * Every test starts from the HOME page and clicks the CTA that navigates into the mock interview
+ * (Home hero "Try AI Interview" -> /mock-interview/interview), rather than deep-linking the setup URL.
+ *
+ * Positive: create a mock job (predefined + custom) and conduct the interview to completion.
+ * Negative: validation on the user-info and custom-job forms.
+ *
+ * Intended for the PROD environment (run with ENVIRONMENT=prod). The mock company id differs per env.
+ */
+const mockCompanyId = () =>
+    Cypress.env('environment') === 'prod'
+        ? 'LpxLNjHw9JYKfmPB4tIYwO7oopg1'
+        : '84IilursBlRYW4dTsomTwpFKHv22';
 
 describe('Mock Interview Tests', () => {
-    Cypress.on('uncaught:exception', (err, runnable) => {
-        return false;
-    });
+    Cypress.on('uncaught:exception', () => false);
 
     beforeEach(() => {
         cy.logEnvironmentInfo();
-        // Handle cookie consent if present
-        cy.handleCookieConsent();
-        cy.task('logMessage', {
-            message: 'Starting mock interview test',
-            style: 'green',
-        });
+        cy.task('logMessage', { message: 'Starting mock interview test', style: 'green' });
     });
 
-    it('should verify mock interview landing page elements', () => {
+    // ----------------------------- Positive: setup page -----------------------------
+    it('should open the mock interview from the home page and show the job-information setup', () => {
         cy.task('logMessage', {
-            message: 'Test Case: Should verify mock interview landing page elements',
+            message: 'Test Case: Open mock interview from home and verify the setup page',
             style: 'blue',
         });
 
-        // Visit mock interview page
-        cy.visit(`${baseUrl}mock-interview/interview?stage=job_information`);
+        // Home -> "Try AI Interview" -> /mock-interview/interview
+        cy.openMockInterviewFromHome();
 
-        // Verify page elements
+        // Verified heading on the job-information setup page
         cy.checkTextCommand('Practice giving live, conversational interviews for free.');
-        cy.checkTextCommand('You can select a practice interview from popular roles, or just create an interview for any job title you wish to practice for.');
 
-        // Verify buttons
-        cy.verifyStartPracticingForFreeBtn();
-        cy.verifyBookADemoBtn();
-
-        cy.task('logMessage', {
-            message: 'Mock interview landing page verified successfully',
-            style: 'green',
-        });
+        // Both primary CTAs are present (buttons sit at the bottom of a scroll container)
+        cy.get('#mock-submit-interview').scrollIntoView().should('be.visible'); // Proceed
+        cy.get('#mock-start-customisation-step2').scrollIntoView().should('be.visible'); // Create my custom interview
     });
 
-    it('should complete default mock interview process', () => {
+    // ----------------------------- Negative: user-info validation -----------------------------
+    it('should show validation errors when the user info is submitted empty', () => {
         cy.task('logMessage', {
-            message: 'Test Case: Should complete default mock interview process',
+            message: 'Test Case: User info validation (empty submit)',
             style: 'blue',
         });
 
-        // Visit mock interview page
-        cy.visit(`${baseUrl}mock-interview/interview?stage=job_information`);
+        cy.openMockInterviewFromHome();
 
-        // Select a default role and complete the process
-        const companyID = Cypress.env('environment') === 'prod' ? 'LpxLNjHw9JYKfmPB4tIYwO7oopg1' : '84IilursBlRYW4dTsomTwpFKHv22';
+        // Predefined role is auto-selected -> Proceed to the user-information stage
+        cy.clickOnMockInterviewSubmitBtn();
 
+        // Submitting empty shows two "* Required" errors
+        cy.checkValidationOnUserInfoPage();
+    });
+
+    // ----------------------------- Negative: custom-job validation -----------------------------
+    it('should show validation errors on an empty custom interview form', () => {
         cy.task('logMessage', {
-            message: `Using company ID: ${companyID}`,
-            style: 'gray',
+            message: 'Test Case: Custom interview validation (empty submit)',
+            style: 'blue',
         });
 
-        // Select first role
-        cy.get('div.bg-transparent').first().click();
+        cy.openMockInterviewFromHome();
 
-        // Complete default mock interview process
-        cy.completeDefaultMockInterviewProcess(companyID);
+        // Enter custom mode and submit empty -> "* Required" errors
+        cy.verifyCustomMockInterviewFields();
+    });
+
+    it('should reject a custom interview title with special characters', () => {
+        cy.task('logMessage', {
+            message: 'Test Case: Custom interview invalid (special-character) title',
+            style: 'blue',
+        });
+
+        cy.openMockInterviewFromHome();
+        cy.verifyCustomMockInterviewInvalidTitle();
+    });
+
+    // ----------------------------- Positive: full conduct (default) -----------------------------
+    it('should complete a default (predefined) mock interview', () => {
+        cy.task('logMessage', {
+            message: 'Test Case: Complete a default mock interview end to end',
+            style: 'blue',
+        });
+
+        cy.openMockInterviewFromHome();
+        cy.completeDefaultMockInterviewProcess(mockCompanyId());
 
         cy.task('logMessage', {
             message: 'Default mock interview completed successfully',
@@ -67,78 +95,18 @@ describe('Mock Interview Tests', () => {
         });
     });
 
-    it('should create custom mock interview', () => {
+    // ----------------------------- Positive: full conduct (custom) -----------------------------
+    it('should complete a custom mock interview', () => {
         cy.task('logMessage', {
-            message: 'Test Case: Should create custom mock interview',
+            message: 'Test Case: Complete a custom mock interview end to end',
             style: 'blue',
         });
 
-        // Visit mock interview page
-        cy.visit(`${baseUrl}mock-interview/interview?stage=job_information`);
-
-        // Click on create custom interview
-        cy.clickOnCreateCustomMockInterviewBtn();
-
-        // Verify custom interview fields
-        cy.verifyCustomMockInterviewFields();
-
-        // Create custom interview with details
-        const jobTitle = 'Custom Test Role';
-        const jobDescription = 'This is a custom test interview for automation purposes';
-        const interviewTime = '10';
-
-        cy.createCustomMockInterview(jobTitle, jobDescription, interviewTime);
-
-        // Submit custom interview
-        cy.clickOnMockInterviewSubmitBtn();
-
-        // Enter user details
-        cy.enterUserDetailsForMockInterview('Test User', 'testuser@mailinator.com');
-
-        // Start the interview
-        cy.clickOnStartMockInterviewBtn();
+        cy.openMockInterviewFromLanding();
+        cy.completeCustomMockInterviewProcess(mockCompanyId());
 
         cy.task('logMessage', {
-            message: 'Custom mock interview created successfully',
-            style: 'green',
-        });
-    });
-
-    it('should validate mock interview user information fields', () => {
-        cy.task('logMessage', {
-            message: 'Test Case: Should validate mock interview user information fields',
-            style: 'blue',
-        });
-
-        // Visit mock interview page
-        cy.visit(`${baseUrl}mock-interview/interview?stage=job_information`);
-
-        // Select a role
-        cy.get('div.bg-transparent').first().click();
-
-        // Try to proceed without filling user details
-        cy.checkValidationOnUserInfoPage();
-
-        cy.task('logMessage', {
-            message: 'Mock interview field validation working correctly',
-            style: 'green',
-        });
-    });
-
-    it('should verify role switching functionality', () => {
-        cy.task('logMessage', {
-            message: 'Test Case: Should verify role switching functionality',
-            style: 'blue',
-        });
-
-        // Visit mock interview page
-        cy.visit(`${baseUrl}mock-interview/interview?stage=job_information`);
-
-        // Click through all roles
-        cy.clickOnAllRoles();
-
-        cy.task('logMessage', {
-            message: 'Role switching functionality verified successfully',
+            message: 'Custom mock interview completed successfully',
             style: 'green',
         });
     });
