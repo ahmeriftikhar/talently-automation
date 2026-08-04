@@ -204,6 +204,39 @@ export const selectors = {
         // --- Validation (any step) ---
         validationError: '.text-red-500',
     },
+    // Applied-candidates page (/applied-candidates) — candidate actions (scores, move stage).
+    // Reached from a job card's "View All" on /create-job. Actions require an UNLOCKED, SCORED
+    // candidate (a completed interview report); locked/processing rows have a disabled kebab.
+    candidateActions: {
+        // Entry: job-stat-card "View All" (no id — text only, one per stat tile)
+        viewAllButton: 'button:contains("View All")',
+        // Top Radix tabs
+        candidatesTab: '[role="tab"]:contains("Candidates")',
+        jobDetailsTab: '[role="tab"]:contains("Job Details")',
+        // Stage chips (the real status filter) — plain buttons by label (Reconsider is not a chip)
+        stageChip: (label) => `button:contains("${label}")`,
+        // Candidate table
+        table: 'table',
+        rows: 'table tbody tr',
+        headerScore: 'table thead th:contains("Score")',
+        headerStage: 'table thead th:contains("Stage")',
+        // Score is an inline SVG <text> reading "N%" (or "Processing" spinner when not scored)
+        scoreText: 'table tbody tr td svg text',
+        // Per-row action kebab (Radix DropdownMenu trigger wraps this span). Disabled if locked.
+        actionTrigger: '[aria-label="Customise options"]',
+        lockedUpgradeButton: '#upgrade-plan-home',
+        // Menu items (portaled to body) — by GA id
+        shortlistOption: '#shortlist-candidate',
+        rejectOption: '#reject-candidate',
+        reconsiderOption: '#reconsider-candidate', // "Move Back to Applied"
+        // Status-update modal (reason required; confirm disabled until textarea non-empty)
+        reasonTextarea: 'textarea[placeholder="Leave Feedback"]',
+        confirmActionButton: '#submit-candidate-rejection-reason',
+        cancelActionButton: 'button:contains("Cancel")',
+        modalBackdrop: '#backdrop',
+        // Success toast after a move
+        statusUpdatedToast: ':contains("Interview status updated")',
+    },
     candidate: {
         nameInput: '[data-cy="candidate-name-input"], [placeholder="Name"], [placeholder="Enter name"]',
         emailInput: '[data-cy="candidate-email-input"], [placeholder="Email"], [placeholder="Enter email"]',
