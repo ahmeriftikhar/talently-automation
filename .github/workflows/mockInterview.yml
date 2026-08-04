@@ -8,12 +8,12 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment (mock interview is intended for prod)'
+        description: 'Target environment'
         type: choice
         options:
           - prod
           - dev
-        default: prod
+        default: dev
       jobTitle:
         description: 'Custom interview job title'
         required: true
