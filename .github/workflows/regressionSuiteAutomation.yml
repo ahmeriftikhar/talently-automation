@@ -42,7 +42,8 @@ jobs:
         with:
           browser: chrome
           # Chrome (not Electron) so the interview specs get the fake camera/mic launch args.
-          spec: cypress/e2e/auth/**/*.cy.js,cypress/e2e/candidates/**/*.cy.js,cypress/e2e/create-jobs/**/*.cy.js,cypress/e2e/dashboard/**/*.cy.js,cypress/e2e/jobs/**/*.cy.js,cypress/e2e/interviews/interviewWithoutJobCreation.cy.js
+          spec: cypress/e2e/auth/**/*.cy.js
+          #,cypress/e2e/candidates/**/*.cy.js,cypress/e2e/create-jobs/**/*.cy.js,cypress/e2e/dashboard/**/*.cy.js,cypress/e2e/jobs/**/*.cy.js,cypress/e2e/interviews/interviewWithoutJobCreation.cy.js
         env:
           # Selects dev/prod URLs in cypress.config.js. Manual runs use the chosen input;
           # scheduled runs default to dev.
