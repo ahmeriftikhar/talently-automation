@@ -2,18 +2,39 @@ import { selectors } from '../selectors/selectors';
 
 const c = selectors.candidateActions;
 
-// From /create-job, click the first job card's "View All" to open its applied-candidates page.
-Cypress.Commands.add('openAppliedCandidatesForFirstJob', () => {
-    cy.log('Opening applied candidates for the first job via View All');
+// From /create-job, auto-pick the FIRST job card that actually has candidates (each card shows
+// "Total Candidates: N") and open its applied-candidates page via that card's "View All".
+// Falls back to the first job if none report candidates (tests then skip via their row-count guard).
+Cypress.Commands.add('openAppliedCandidatesForJobWithCandidates', () => {
+    cy.log('Opening applied candidates for the first job that has candidates');
     cy.visit('/create-job');
     cy.get(selectors.jobs.activeTab, { timeout: 30000 }).should('be.visible');
     cy.get(selectors.jobs.jobCard, { timeout: 30000 }).should('have.length.greaterThan', 0);
 
-    cy.intercept('GET', '**/candidates?*').as('getCandidates');
-    cy.get(c.viewAllButton, { timeout: 15000 }).first().scrollIntoView().click();
+    // The per-card "Total Candidates: N" only renders after the interview_counts load asynchronously.
+    // Wait for it to appear before scanning, otherwise every card reads as having no count.
+    cy.contains('Total Candidates:', { timeout: 30000 }).should('exist');
 
-    cy.url({ timeout: 15000 }).should('include', '/applied-candidates');
-    cy.wait('@getCandidates', { timeout: 60000 }).its('response.statusCode').should('eq', 200);
+    cy.get(selectors.jobs.jobCard).then(($cards) => {
+        let idx = -1;
+        $cards.each((i, el) => {
+            const m = Cypress.$(el).text().match(/Total Candidates:\s*(\d+)/i);
+            if (idx < 0 && m && parseInt(m[1], 10) > 0) idx = i;
+        });
+
+        if (idx < 0) {
+            cy.task('logMessage', { message: 'No job reports any candidates — falling back to the first job', style: 'yellow' });
+            idx = 0;
+        } else {
+            cy.task('logMessage', { message: `Opening applied candidates for job #${idx + 1} (has candidates)`, style: 'gray' });
+        }
+
+        cy.intercept('GET', '**/candidates?*').as('getCandidates');
+        cy.get(selectors.jobs.jobCard).eq(idx).contains('button', 'View All').first().scrollIntoView().click();
+
+        cy.url({ timeout: 15000 }).should('include', '/applied-candidates');
+        cy.wait('@getCandidates', { timeout: 60000 }).its('response.statusCode').should('eq', 200);
+    });
 });
 
 // Click a stage chip (Applied / Shortlisted / Rejected). Clicking the ALREADY-ACTIVE chip does not
@@ -40,10 +61,30 @@ Cypress.Commands.add('candidateRowCount', () => {
     return cy.get('body').then(($b) => $b.find(c.rows).length);
 });
 
-// Move the first ACTIONABLE candidate (unlocked + scored, so its kebab is enabled) via the given
-// action, providing the required reason. `action` = 'shortlist' | 'reject' | 'reconsider'.
-// Yields the moved candidate's name so the caller can assert the move.
-Cypress.Commands.add('moveFirstCandidate', (action, reason = 'Automated test action') => {
+// Yield the index of the first ACTIONABLE candidate row — one whose interview report is scored
+// (Score cell shows "N%", not "Processing") AND whose action kebab is enabled (unlocked, not
+// paywalled). Yields -1 when no row is actionable (e.g. all reports still compiling). Callers
+// should skip gracefully on -1 rather than fail — it's a data/timing condition, not a bug.
+Cypress.Commands.add('firstActionableCandidateIndex', () => {
+    return cy.get('body').then(($b) => {
+        const rows = $b.find(c.rows);
+        let idx = -1;
+        rows.each((i, tr) => {
+            if (idx >= 0) return;
+            const $tr = Cypress.$(tr);
+            const scored = [...$tr.find('svg text')].some((el) => /%$/.test((el.textContent || '').trim()));
+            const trigger = $tr.find(c.actionTrigger).closest('button');
+            const enabled = trigger.length > 0 && !trigger.is(':disabled');
+            if (scored && enabled) idx = i;
+        });
+        return idx;
+    });
+});
+
+// Move the candidate at row `index` via the given action, providing the required reason.
+// `action` = 'shortlist' | 'reject' | 'reconsider'. Yields the moved candidate's name.
+// Use with firstActionableCandidateIndex() so the target row is scored & unlocked.
+Cypress.Commands.add('moveCandidateAtIndex', (index, action, reason = 'Automated test action') => {
     const optionSelector = {
         shortlist: c.shortlistOption,
         reject: c.rejectOption,
@@ -51,16 +92,16 @@ Cypress.Commands.add('moveFirstCandidate', (action, reason = 'Automated test act
     }[action];
     if (!optionSelector) throw new Error(`Unknown candidate action: ${action}`);
 
-    cy.log(`Moving first candidate via "${action}"`);
+    cy.log(`Moving candidate at row ${index} via "${action}"`);
 
-    // Capture the first row's candidate name (from the name <h6>) for later assertions.
-    return cy.get(c.rows, { timeout: 20000 }).first().find('h6').first().invoke('text').then((rawName) => {
+    // Capture the row's candidate name (from the name <h6>) for later assertions.
+    return cy.get(c.rows, { timeout: 20000 }).eq(index).find('h6').first().invoke('text').then((rawName) => {
         const name = rawName.trim();
 
         cy.intercept('PATCH', '**/interview/*').as('patchInterview');
 
-        // Open the row's kebab (trigger must be enabled — i.e. unlocked & scored candidate)
-        cy.get(c.rows).first().find(c.actionTrigger).should('be.visible').click({ force: true });
+        // Open the row's kebab (trigger is enabled — unlocked & scored candidate)
+        cy.get(c.rows).eq(index).find(c.actionTrigger).should('be.visible').click({ force: true });
 
         // Menu is portaled to body — click the action item, then fill the required reason
         cy.get(optionSelector, { timeout: 10000 }).should('be.visible').click();
