@@ -10,7 +10,7 @@ on:
       interviewLink:
         description: 'Interview Link'
         required: true
-        default: 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a676742ddb7cb39e75ff64f'
+        default: 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a71cd677de749d530638904'
 
 concurrency:
   group: interview-wjc-${{ github.ref }}
