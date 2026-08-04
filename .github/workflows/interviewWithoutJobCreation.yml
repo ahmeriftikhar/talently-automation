@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
     inputs:
       interviewLink:
-        description: 'Interview link to run against. Leave blank to use the default dev link.'
-        required: false
+        description: 'Interview Link'
+        required: true
         default: 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a676742ddb7cb39e75ff64f'
 
 concurrency:
