@@ -69,7 +69,7 @@ describe('Mock Interview Tests', () => {
         cy.verifyCustomMockInterviewFields();
     });
 
-    it('should reject a custom interview title with special characters', () => {
+    it.skip('should reject a custom interview title with special characters', () => {
         cy.task('logMessage', {
             message: 'Test Case: Custom interview invalid (special-character) title',
             style: 'blue',

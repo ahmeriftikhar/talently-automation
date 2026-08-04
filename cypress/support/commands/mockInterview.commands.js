@@ -108,7 +108,7 @@ Cypress.Commands.add('verifyCustomMockInterviewFields', () => {
 Cypress.Commands.add('verifyCustomMockInterviewInvalidTitle', () => {
     cy.clickOnCreateCustomMockInterviewBtn();
     cy.get(sel.jobTitleInput, { timeout: 10000 }).clear().type('@@@###');
-    cy.get(sel.jobDescriptionEditor).click().type('This is a sufficiently long job description for validation.');
+    cy.get(sel.jobDescriptionEditor).clear().type('This is a sufficiently long job description for validation.');
     cy.get(sel.proceedBtn).click();
     // Invalid title keeps us on the job-information stage
     cy.get(sel.userNameInput).should('not.exist');
