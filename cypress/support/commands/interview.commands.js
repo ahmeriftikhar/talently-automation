@@ -224,7 +224,7 @@ Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId, sid) =>
     const formattedMessage = question.replace(/\s+/g, ' ').trim();
 
     cy.task('logMessage', {
-        message: `Generating answer for: ${formattedMessage}...`,
+        message: `Generating answer for: ${formattedMessage.substring(0, 50)}...`,
         style: 'blue',
     });
 
@@ -276,7 +276,7 @@ Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, inter
     };
 
     cy.task('logMessage', {
-        message: `Sending answer: ${answer}...`,
+        message: `Sending answer: ${answer.substring(0, 50)}...`,
         style: 'blue',
     });
 

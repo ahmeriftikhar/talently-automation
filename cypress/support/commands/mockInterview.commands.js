@@ -269,10 +269,14 @@ Cypress.Commands.add('completeCustomMockInterviewProcess', (companyId) => {
     const email = faker.internet.email({ firstName: name }).toLowerCase();
 
     cy.clickOnCreateCustomMockInterviewBtn();
-    cy.generateJobDescription().then((jobDescription) => {
+    cy.generateJobDescription().then((generatedDescription) => {
         const jobTitles = ['SQA Automation Engineer', 'Software Tester', 'Quality Assurance Engineer'];
-        const jobTitle = jobTitles[Math.floor(Math.random() * jobTitles.length)];
-        cy.createCustomMockInterview(jobTitle, jobDescription, 10);
+        // Optional overrides from the workflow (CYPRESS_JOB_TITLE / _DESCRIPTION / _INTERVIEW_MINUTES),
+        // with built-in fallbacks when not provided.
+        const jobTitle = Cypress.env('JOB_TITLE') || jobTitles[Math.floor(Math.random() * jobTitles.length)];
+        const jobDescription = Cypress.env('JOB_DESCRIPTION') || generatedDescription;
+        const interviewMinutes = Cypress.env('INTERVIEW_MINUTES') || 10;
+        cy.createCustomMockInterview(jobTitle, jobDescription, interviewMinutes);
         cy.clickOnMockInterviewSubmitBtn();
 
         // User information

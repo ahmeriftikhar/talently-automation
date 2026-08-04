@@ -1,0 +1,94 @@
+name: Mock Interview
+
+# Runs the mock-interview spec (setup + validations + full default & custom interview completions).
+# The custom-interview fields (title / description / duration) are overridable — the spec reads them
+# via Cypress.env and falls back to built-in defaults when not provided.
+# Mock interviews are intended for PROD (the mock company id differs per environment), so prod is the default.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (mock interview is intended for prod)'
+        type: choice
+        options:
+          - prod
+          - dev
+        default: prod
+      jobTitle:
+        description: 'Custom interview job title'
+        required: true
+        default: 'SQA Automation Engineer'
+      jobDescription:
+        description: 'Custom interview job description (>= 30 characters)'
+        required: true
+        default: 'We are seeking a skilled QA Automation Engineer to design, build and maintain reliable end-to-end test suites.'
+      interviewMinutes:
+        description: 'Custom interview duration (minutes)'
+        type: choice
+        options:
+          - '5'
+          - '10'
+          - '15'
+        default: '10'
+
+concurrency:
+  group: mock-interview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mock:
+    name: Mock Interview
+    runs-on: ubuntu-latest
+    # Includes two full interview completions that self-answer to the end — allow plenty of time.
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Run mock interview spec
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          # Chrome so the interview gets the fake camera/mic launch args (Electron ignores them).
+          spec: cypress/e2e/mock-interviews/mockInterview.cy.js
+        env:
+          # Selects dev/prod URLs (and the per-env mock company id in the spec).
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'prod' }}
+          # User-provided custom-interview fields. Passed as CYPRESS_* (safe for spaces/commas) —
+          # the spec reads Cypress.env('JOB_TITLE' / 'JOB_DESCRIPTION' / 'INTERVIEW_MINUTES').
+          CYPRESS_JOB_TITLE: ${{ github.event.inputs.jobTitle }}
+          CYPRESS_JOB_DESCRIPTION: ${{ github.event.inputs.jobDescription }}
+          CYPRESS_INTERVIEW_MINUTES: ${{ github.event.inputs.interviewMinutes }}
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-failed-screenshots
+          path: cypress/failedCasesEvidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-video
+          path: cypress/videos
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload interview report JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-report
+          path: cypress/fixtures/interviewReports
+          if-no-files-found: ignore
+          retention-days: 14
