@@ -150,10 +150,30 @@ Cypress.Commands.add('checkInactivityModalAndClickOnResumeBtn', () => {
 });
 
 // Wait for the mock interview upload/completion (Next.js data fetch for the interview-complete page).
+// Confirm the mock interview reached completion. The loop stops once the bot's "interview is
+// completed" message appears, so completion is already OBSERVABLE here (via the interview-complete
+// redirect OR the inline completion message). Waiting on the /_next/data completion GET instead was
+// racy — that request fires during the loop, before this command's intercept exists, so cy.wait
+// never saw it and hung for the full 40-minute timeout. Poll the observable state instead.
 Cypress.Commands.add('waitForMockInterviewUpload', () => {
-    cy.intercept('GET', mockCompletedCall).as('mockInterviewCompletedCall');
     cy.checkInactivityModalAndClickOnResumeBtn();
-    cy.wait('@mockInterviewCompletedCall', { timeout: 2400000 }).its('response.statusCode').should('eq', 200);
+
+    const maxWait = 300000; // 5 min — completion/redirect is near-immediate once the loop stops
+    const waitForCompletion = (elapsed) =>
+        cy.url({ log: false }).then((url) =>
+            cy.get('body', { log: false }).then(($body) => {
+                if (url.includes('interview-complete') || $body.html().includes('Interview is completed')) {
+                    cy.task('logMessage', { message: 'Mock interview completion confirmed', style: 'green' });
+                    return;
+                }
+                if (elapsed >= maxWait) {
+                    throw new Error('Mock interview did not reach the completion state within 5 minutes');
+                }
+                return cy.wait(2000, { log: false }).then(() => waitForCompletion(elapsed + 2000));
+            })
+        );
+
+    waitForCompletion(0);
 });
 
 // Send an answer to the MOCK interview (interviewType + real companyId differ from the fixed flow).

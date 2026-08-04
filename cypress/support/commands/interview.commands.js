@@ -319,21 +319,32 @@ Cypress.Commands.add('isInterviewCompleted', () => {
 });
 
 // Wait for interview completion
-Cypress.Commands.add('waitForInterviewCompletion', (timeout = 2400000) => {
-    cy.intercept('GET', interviewCompletedCall).as('interviewCompletedCall');
-
-    cy.log('Waiting for interview to complete...');
+// Confirm the interview reached completion. By the time this runs the loop has already ended on the
+// completion signal, so completion is OBSERVABLE here (the feedback-page redirect OR the inline
+// "Interview is completed" message). Waiting on the INTERVIEW_COMPLETED webhook GET instead was racy
+// — that request fires during the loop, before this command's intercept exists, so cy.wait never saw
+// it and hung for the full 40-minute timeout. Poll the observable state instead.
+Cypress.Commands.add('waitForInterviewCompletion', (maxWait = 300000) => {
     cy.task('logMessage', {
-        message: 'Waiting for interview completion (max 40 minutes)',
+        message: 'Confirming interview completion (feedback page / completion message)',
         style: 'gray',
     });
 
-    cy.wait('@interviewCompletedCall', { timeout: timeout }).its('response.statusCode').should('eq', 200);
+    const waitForCompletion = (elapsed) =>
+        cy.url({ log: false }).then((url) =>
+            cy.get('body', { log: false }).then(($body) => {
+                if (url.includes('feedback') || $body.html().includes(selectors.interview.completedMessage)) {
+                    cy.task('logMessage', { message: 'Interview completed successfully', style: 'green' });
+                    return;
+                }
+                if (elapsed >= maxWait) {
+                    throw new Error('Interview did not reach the completion state within the allotted time');
+                }
+                return cy.wait(2000, { log: false }).then(() => waitForCompletion(elapsed + 2000));
+            })
+        );
 
-    cy.task('logMessage', {
-        message: 'Interview completed successfully',
-        style: 'green',
-    });
+    waitForCompletion(0);
 });
 
 // Main interview flow without job creation

@@ -1,0 +1,106 @@
+name: Parallel Interview Sessions
+
+# Runs the link-driven self-answering interview N times IN PARALLEL against the same link.
+# Each session is a separate matrix job that registers its own (faker) candidate, so N sessions
+# = N distinct simultaneous interviews — useful for concurrency/load checks.
+# The environment (dev/prod) is derived from the link's host; no separate input needed.
+on:
+  workflow_dispatch:
+    inputs:
+      interviewLink:
+        description: 'Interview link (all parallel sessions run against this link)'
+        required: true
+        default: 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a71cd677de749d530638904'
+      parallelCount:
+        description: 'Number of interviews to run in parallel (1-60)'
+        required: true
+        default: '5'
+
+jobs:
+  # Build the matrix ([1..N]) and derive the environment from the link's host.
+  prepare:
+    name: Prepare parallel sessions
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+      environment: ${{ steps.gen.outputs.environment }}
+    steps:
+      - name: Build session matrix and derive environment
+        id: gen
+        run: |
+          N="${{ github.event.inputs.parallelCount }}"
+          # Sanitize + bound the count to 1..60 (GitHub Team plan allows 60 concurrent jobs).
+          if ! echo "$N" | grep -qE '^[0-9]+$'; then N=1; fi
+          if [ "$N" -lt 1 ]; then N=1; fi
+          if [ "$N" -gt 60 ]; then N=60; fi
+          ARR=$(seq -s, 1 "$N")
+          echo "matrix={\"session\":[$ARR]}" >> "$GITHUB_OUTPUT"
+
+          # Prod frontends live on *.talently.ai; the dev frontend is on *.amplifyapp.com.
+          LINK="${{ github.event.inputs.interviewLink }}"
+          if echo "$LINK" | grep -qiE 'talently\.ai'; then ENV=prod; else ENV=dev; fi
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+          echo "Running $N parallel session(s) against $LINK (environment=$ENV)"
+
+  interview:
+    name: Interview session ${{ matrix.session }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    # Each session self-answers to completion — allow plenty of time.
+    timeout-minutes: 90
+    strategy:
+      # Don't cancel the other sessions if one fails — we want every session's result.
+      fail-fast: false
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      # Run all requested sessions concurrently (bounded to the matrix size, capped at 60 above
+      # to match the GitHub Team plan's concurrent-job limit).
+      max-parallel: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Run interview session ${{ matrix.session }}
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          # Chrome so the interview gets the fake camera/mic launch args (Electron ignores them).
+          spec: cypress/e2e/interviews/interviewWithoutJobCreation.cy.js
+          # Passed to Cypress as --env → the spec reads Cypress.env('interviewLink').
+          env: interviewLink=${{ github.event.inputs.interviewLink }}
+        env:
+          # Derived from the link's host — selects the matching backend in cypress.config.js.
+          ENVIRONMENT: ${{ needs.prepare.outputs.environment }}
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          # Suffix with the session number so parallel jobs' artifacts don't collide.
+          name: interview-failed-screenshots-session-${{ matrix.session }}
+          path: cypress/failedCasesEvidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-video-session-${{ matrix.session }}
+          path: cypress/videos
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload interview report JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-report-session-${{ matrix.session }}
+          path: cypress/fixtures/interviewReports
+          if-no-files-found: ignore
+          retention-days: 14
