@@ -95,6 +95,9 @@ Cypress.Commands.add('createCustomMockInterview', (jobTitle, jobDescription, int
 Cypress.Commands.add('verifyCustomMockInterviewFields', () => {
     cy.clickOnCreateCustomMockInterviewBtn();
     cy.get(sel.jobTitleInput, { timeout: 10000 }).should('be.visible'); // in custom mode
+    cy.get(sel.jobDescriptionEditor).should('be.visible');
+    cy.get(sel.jobTitleInput).clear();
+    cy.get(sel.jobDescriptionEditor).clear();
     cy.get(sel.proceedBtn).click();
     // Validation blocks progression — the user-info fields must NOT appear, and we stay in custom mode.
     cy.get(sel.userNameInput).should('not.exist');
