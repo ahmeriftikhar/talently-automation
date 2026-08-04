@@ -204,8 +204,10 @@ Cypress.Commands.add('getQuestionFromBot', (questionIndex) => {
                     const trimmedQuestion = question.trim();
                     const isCompletionMessage = /interview\s+is\s+completed/i.test(trimmedQuestion);
                     if (isCompletionMessage) {
+                        // Print the actual completion text the bot sent, so it's visible that the
+                        // interview really finished (not just a generic "detected" line).
                         return cy.task('logMessage', {
-                            message: 'Completion message detected instead of a question',
+                            message: `Completion message detected instead of a question: "${trimmedQuestion}"`,
                             style: 'green',
                         }).then(() => null);
                     }
@@ -330,10 +332,14 @@ Cypress.Commands.add('waitForInterviewCompletion', (maxWait = 300000) => {
         style: 'gray',
     });
 
+    // Match completion the SAME way getQuestionFromBot detects it — a case-insensitive regex — so
+    // the message that's already on screen (which stopped the loop) is recognized immediately.
+    // A case-sensitive includes() missed lowercase/embedded variants and hung until timeout.
+    const completionRegex = /interview\s+is\s+completed/i;
     const waitForCompletion = (elapsed) =>
         cy.url({ log: false }).then((url) =>
             cy.get('body', { log: false }).then(($body) => {
-                if (url.includes('feedback') || $body.html().includes(selectors.interview.completedMessage)) {
+                if (url.includes('feedback') || completionRegex.test($body.text())) {
                     cy.task('logMessage', { message: 'Interview completed successfully', style: 'green' });
                     return;
                 }
@@ -451,9 +457,17 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                             // Check if interview is completed
                             cy.isInterviewCompleted().then((completed) => {
                                 if (completed) {
-                                    cy.task('logMessage', {
-                                        message: 'Interview completion detected',
-                                        style: 'green',
+                                    // Print the bot's final message so it's visible the interview
+                                    // really completed (bot bubbles use bg-[#5B5048]; read the last).
+                                    cy.get('body').then(($body) => {
+                                        const botBubbles = $body.find('[class*="5B5048"]');
+                                        const finalMessage = botBubbles.length ? botBubbles.last().text().trim() : '';
+                                        cy.task('logMessage', {
+                                            message: finalMessage
+                                                ? `Interview completion detected — final message: "${finalMessage}"`
+                                                : 'Interview completion detected',
+                                            style: 'green',
+                                        });
                                     });
 
                                     // Capture final state before redirect

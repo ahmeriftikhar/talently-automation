@@ -159,10 +159,13 @@ Cypress.Commands.add('waitForMockInterviewUpload', () => {
     cy.checkInactivityModalAndClickOnResumeBtn();
 
     const maxWait = 300000; // 5 min — completion/redirect is near-immediate once the loop stops
+    // Case-insensitive match (same as getQuestionFromBot's detection) so the message already on
+    // screen is recognized immediately rather than missed by a case-sensitive includes().
+    const completionRegex = /interview\s+is\s+completed/i;
     const waitForCompletion = (elapsed) =>
         cy.url({ log: false }).then((url) =>
             cy.get('body', { log: false }).then(($body) => {
-                if (url.includes('interview-complete') || $body.html().includes('Interview is completed')) {
+                if (url.includes('interview-complete') || completionRegex.test($body.text())) {
                     cy.task('logMessage', { message: 'Mock interview completion confirmed', style: 'green' });
                     return;
                 }
@@ -233,7 +236,16 @@ Cypress.Commands.add('conductMockInterview', (companyId) => {
                 cy.url().then((url) =>
                     cy.get('body').then(($body) => {
                         if (onCompletePage($body, url)) {
-                            cy.task('logMessage', { message: 'Mock interview completed', style: 'green' });
+                            // Print the bot's final message so it's visible the interview really
+                            // completed (bot bubbles use bg-[#5B5048]; read the last one).
+                            const botBubbles = $body.find('[class*="5B5048"]');
+                            const finalMessage = botBubbles.length ? botBubbles.last().text().trim() : '';
+                            cy.task('logMessage', {
+                                message: finalMessage
+                                    ? `Mock interview completed — final message: "${finalMessage}"`
+                                    : 'Mock interview completed',
+                                style: 'green',
+                            });
                             return;
                         }
                         cy.checkInactivityModalAndClickOnResumeBtn();
