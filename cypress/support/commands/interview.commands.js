@@ -256,7 +256,7 @@ Cypress.Commands.add('generateAnswer', (callId, userId, question, jobId, sid) =>
 });
 
 // Send answer using API
-Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, interviewDuration) => {
+Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, interviewDuration, interviewType = 'fixed') => {
     cy.handleInactivityModal();
     cy.handleTerminationBox();
     const user_message_start_timestamp = new Date().toUTCString();
@@ -267,7 +267,9 @@ Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, inter
         callId: callId,
         userId: userId,
         userName: userName,
-        interviewType: 'fixed',
+        // Use the job's real type ('fixed' or 'dynamic') so dynamic-questions jobs are submitted
+        // correctly; defaults to 'fixed' for backwards compatibility when not passed.
+        interviewType: interviewType,
         interviewDuration: parseInt(interviewDuration.split('-')[1], 10), // "20 - 30 minutes" → 30
         companyId: 'dynamic',
         user_message_start_timestamp: user_message_start_timestamp
@@ -468,7 +470,7 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                     }
                                     // Generate answer for all questions
                                     cy.generateAnswer(callId, userId, question, jobId, sid).then((answer) => {
-                                        cy.sendAnswer(sid, answer, callId, userId, randomName, interviewDuration).then(() => {
+                                        cy.sendAnswer(sid, answer, callId, userId, randomName, interviewDuration, interviewType).then(() => {
                                             // Update JSON
                                             cy.readFile(filepath).then((data) => {
                                                 data.questionsAndAnswers.push({ question, answer });

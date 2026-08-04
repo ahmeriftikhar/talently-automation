@@ -1,0 +1,87 @@
+name: Interview Without Job Creation
+
+# Runs the link-driven self-answering interview. The user supplies the interview link; the spec
+# reads it via Cypress.env('interviewLink'). No company login is required — the candidate registers
+# directly through the provided link. The environment (dev/prod) is DERIVED from the link's host
+# (so the answer/interview APIs hit the matching backend) — no separate input needed.
+on:
+  workflow_dispatch:
+    inputs:
+      interviewLink:
+        description: 'Interview link to run against. Leave blank to use the default dev link.'
+        required: false
+        default: 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a676742ddb7cb39e75ff64f'
+
+concurrency:
+  group: interview-wjc-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  interview:
+    name: Interview Without Job Creation
+    runs-on: ubuntu-latest
+    # The interview self-answers each question until it completes naturally — allow plenty of time.
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Resolve link and derive environment
+        id: cfg
+        run: |
+          LINK="${{ github.event.inputs.interviewLink }}"
+          # Prod frontends live on *.talently.ai (interview.talently.ai / interview-pro.talently.ai);
+          # the dev frontend is on *.amplifyapp.com. Derive the backend environment from the host.
+          if echo "$LINK" | grep -qiE 'talently\.ai'; then
+            ENV=prod
+          else
+            ENV=dev
+          fi
+          echo "link=$LINK" >> "$GITHUB_OUTPUT"
+          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
+          echo "Using link: $LINK (environment=$ENV)"
+
+      - name: Run interview (without job creation)
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          # Chrome so the interview gets the fake camera/mic launch args (Electron ignores them).
+          spec: cypress/e2e/interviews/interviewWithoutJobCreation.cy.js
+          # Passed to Cypress as --env, so the spec picks it up via Cypress.env('interviewLink').
+          env: interviewLink=${{ steps.cfg.outputs.link }}
+        env:
+          # Derived from the link's host — selects the matching backend in cypress.config.js.
+          ENVIRONMENT: ${{ steps.cfg.outputs.environment }}
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-failed-screenshots
+          path: cypress/failedCasesEvidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-video
+          path: cypress/videos
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload interview report JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interview-report
+          path: cypress/fixtures/interviewReports
+          if-no-files-found: ignore
+          retention-days: 14
