@@ -38,8 +38,10 @@ describe('Dynamic Interview Journey (all customizations, no coding)', () => {
 
         cy.generateJobDescription().then((description) => {
             const jobData = {
-                title: randomTitle(),
-                description,
+                // Optional overrides from the workflow (CYPRESS_JOB_TITLE / _DESCRIPTION), with
+                // built-in fallbacks. Interview duration is not set at creation for dynamic jobs.
+                title: Cypress.env('JOB_TITLE') || randomTitle(),
+                description: Cypress.env('JOB_DESCRIPTION') || description,
                 location: 'Hybrid',
                 jobType: 'Full Time',
                 askForResume: true,

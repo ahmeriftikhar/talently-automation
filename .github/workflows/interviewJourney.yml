@@ -1,0 +1,118 @@
+name: Interview Journey
+
+# End-to-end interview journey for a FIXED or DYNAMIC job in a single workflow:
+#   log in as company -> create the job (fixed or dynamic, no coding) -> publish ->
+#   open the candidate link -> conduct the full self-answering interview.
+# The `interviewType` input selects which journey spec runs. Job data is generated inside the
+# spec, so no other fields are required — just the environment and the interview type.
+on:
+  workflow_dispatch:
+    inputs:
+      interviewType:
+        description: 'Interview journey to run'
+        type: choice
+        options:
+          - fixed
+          - dynamic
+        default: fixed
+      environment:
+        description: 'Target environment'
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
+      jobTitle:
+        description: 'Job title'
+        required: true
+        default: 'SQA Automation Engineer'
+      jobDescription:
+        description: 'Job description (>= 30 characters)'
+        required: true
+        default: 'We are seeking a skilled QA Automation Engineer to design, build and maintain reliable end-to-end test suites.'
+      interviewDuration:
+        description: 'Interview duration (fixed journey only; ignored for dynamic)'
+        type: choice
+        options:
+          - '20 - 30 minutes'
+          - '40 - 50 minutes'
+          - '60 - 70 minutes'
+        default: '20 - 30 minutes'
+
+concurrency:
+  # These publish REAL jobs and run a full interview — never cancel a run mid-flight.
+  group: interview-journey-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  journey:
+    name: Interview Journey (${{ github.event.inputs.interviewType }})
+    runs-on: ubuntu-latest
+    # Creates+publishes a job AND self-answers a full interview — allow plenty of time.
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Resolve spec from interview type
+        id: cfg
+        run: |
+          if [ "${{ github.event.inputs.interviewType }}" = "dynamic" ]; then
+            echo "spec=cypress/e2e/interviews/dynamicInterviewJourney.cy.js" >> "$GITHUB_OUTPUT"
+          else
+            echo "spec=cypress/e2e/interviews/fixedInterviewJourney.cy.js" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run interview journey
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          # Chrome so the interview gets the fake camera/mic launch args (Electron ignores them).
+          spec: ${{ steps.cfg.outputs.spec }}
+        env:
+          # Selects dev/prod URLs in cypress.config.js.
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+          # User-provided job fields. Passed as CYPRESS_* (safe for values with spaces/commas) —
+          # the specs read Cypress.env('JOB_TITLE' / 'JOB_DESCRIPTION' / 'INTERVIEW_DURATION') and
+          # fall back to their built-in defaults when a value is absent.
+          CYPRESS_JOB_TITLE: ${{ github.event.inputs.jobTitle }}
+          CYPRESS_JOB_DESCRIPTION: ${{ github.event.inputs.jobDescription }}
+          CYPRESS_INTERVIEW_DURATION: ${{ github.event.inputs.interviewDuration }}
+          # This journey logs in as the company, so credentials are required.
+          # (CYPRESS_* outrank cypress.env.json; needed for prod where no env file is committed.)
+          CYPRESS_COMPANY_EMAIL: ${{ secrets.CYPRESS_COMPANY_EMAIL }}
+          CYPRESS_COMPANY_PASSWORD: ${{ secrets.CYPRESS_COMPANY_PASSWORD }}
+          CYPRESS_WORKSPACE_NAME: ${{ secrets.CYPRESS_WORKSPACE_NAME }}
+
+      - name: Upload failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-failed-screenshots-${{ github.event.inputs.interviewType }}
+          path: cypress/failedCasesEvidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload video
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-video-${{ github.event.inputs.interviewType }}
+          path: cypress/videos
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload interview report JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: journey-report-${{ github.event.inputs.interviewType }}
+          path: cypress/fixtures/interviewReports
+          if-no-files-found: ignore
+          retention-days: 14

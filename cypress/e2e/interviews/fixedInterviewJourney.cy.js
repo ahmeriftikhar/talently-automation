@@ -46,12 +46,14 @@ describe('Fixed Interview Journey (custom questions, no coding)', () => {
         cy.generateJobDescription().then((jobDescription) => {
             const jobTitles = ['SQA Automation Engineer', 'Software Tester', 'Quality Assurance Engineer'];
             const jobData = {
-                title: jobTitles[Math.floor(Math.random() * jobTitles.length)],
-                description: jobDescription,
+                // Optional overrides from the workflow (CYPRESS_JOB_TITLE / _DESCRIPTION / _DURATION),
+                // with built-in fallbacks when not provided.
+                title: Cypress.env('JOB_TITLE') || jobTitles[Math.floor(Math.random() * jobTitles.length)],
+                description: Cypress.env('JOB_DESCRIPTION') || jobDescription,
                 location: 'Hybrid',
                 jobType: 'Full Time',
                 // 20-30 keeps the interview shorter than the 40-50 used by the creation-only spec.
-                duration: '20 - 30 minutes',
+                duration: Cypress.env('INTERVIEW_DURATION') || '20 - 30 minutes',
                 language: '/^English$/',
                 askForResume: true,
                 resumeRequired: true,
