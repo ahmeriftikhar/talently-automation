@@ -2,9 +2,24 @@ import { selectors } from '../selectors/selectors';
 
 const c = selectors.candidateActions;
 
+// Scan the currently-rendered job cards for the first with "Total Candidates: N" (N > 0).
+// Yields that card's index, or -1 if none of the loaded cards report candidates.
+Cypress.Commands.add('firstJobCardWithCandidates', () => {
+    return cy.get(selectors.jobs.jobCard).then(($cards) => {
+        let idx = -1;
+        $cards.each((i, el) => {
+            const m = Cypress.$(el).text().match(/Total Candidates:\s*(\d+)/i);
+            if (idx < 0 && m && parseInt(m[1], 10) > 0) idx = i;
+        });
+        return idx;
+    });
+});
+
 // From /create-job, auto-pick the FIRST job card that actually has candidates (each card shows
 // "Total Candidates: N") and open its applied-candidates page via that card's "View All".
-// Falls back to the first job if none report candidates (tests then skip via their row-count guard).
+// If no loaded card has candidates, keep clicking "Load More Jobs" and re-scanning until one is
+// found or there are no more pages. Falls back to the first job if none ever report candidates
+// (tests then skip via their row-count guard).
 Cypress.Commands.add('openAppliedCandidatesForJobWithCandidates', () => {
     cy.log('Opening applied candidates for the first job that has candidates');
     cy.visit('/create-job');
@@ -15,26 +30,42 @@ Cypress.Commands.add('openAppliedCandidatesForJobWithCandidates', () => {
     // Wait for it to appear before scanning, otherwise every card reads as having no count.
     cy.contains('Total Candidates:', { timeout: 30000 }).should('exist');
 
-    cy.get(selectors.jobs.jobCard).then(($cards) => {
-        let idx = -1;
-        $cards.each((i, el) => {
-            const m = Cypress.$(el).text().match(/Total Candidates:\s*(\d+)/i);
-            if (idx < 0 && m && parseInt(m[1], 10) > 0) idx = i;
+    // Scan the loaded page; if nothing has candidates, load the next page and scan again.
+    const scanOrLoadMore = () => {
+        cy.firstJobCardWithCandidates().then((idx) => {
+            if (idx >= 0) {
+                cy.task('logMessage', { message: `Opening applied candidates for job #${idx + 1} (has candidates)`, style: 'gray' });
+                openViewAll(idx);
+                return;
+            }
+
+            // Nothing on this page — try to load more jobs and re-scan.
+            cy.get('body').then(($b) => {
+                const hasMore = $b.find(selectors.jobs.loadMoreButton).length > 0;
+                if (hasMore) {
+                    cy.task('logMessage', { message: 'No candidates on the loaded jobs — clicking "Load More Jobs" and re-scanning', style: 'yellow' });
+                    cy.get(selectors.jobs.jobCard).its('length').then((before) => {
+                        cy.get(selectors.jobs.loadMoreButton).scrollIntoView().click();
+                        // Wait for the next page to render before re-scanning.
+                        cy.get(selectors.jobs.jobCard, { timeout: 30000 }).should('have.length.greaterThan', before);
+                        scanOrLoadMore();
+                    });
+                } else {
+                    cy.task('logMessage', { message: 'No job reports any candidates across all pages — falling back to the first job', style: 'yellow' });
+                    openViewAll(0);
+                }
+            });
         });
+    };
 
-        if (idx < 0) {
-            cy.task('logMessage', { message: 'No job reports any candidates — falling back to the first job', style: 'yellow' });
-            idx = 0;
-        } else {
-            cy.task('logMessage', { message: `Opening applied candidates for job #${idx + 1} (has candidates)`, style: 'gray' });
-        }
-
+    const openViewAll = (idx) => {
         cy.intercept('GET', '**/candidates?*').as('getCandidates');
         cy.get(selectors.jobs.jobCard).eq(idx).contains('button', 'View All').first().scrollIntoView().click();
-
         cy.url({ timeout: 15000 }).should('include', '/applied-candidates');
         cy.wait('@getCandidates', { timeout: 60000 }).its('response.statusCode').should('eq', 200);
-    });
+    };
+
+    scanOrLoadMore();
 });
 
 // Click a stage chip (Applied / Shortlisted / Rejected). Clicking the ALREADY-ACTIVE chip does not
@@ -109,7 +140,10 @@ Cypress.Commands.add('moveCandidateAtIndex', (index, action, reason = 'Automated
         cy.get(c.confirmActionButton).should('not.be.disabled').click();
 
         cy.wait('@patchInterview', { timeout: 30000 }).its('response.statusCode').should('eq', 200);
-        cy.contains('Interview status updated', { timeout: 15000 }).should('be.visible');
+        // Assert the success toast, then click to dismiss it (closeOnClick). react-toastify dedups
+        // by message id (= this text), so clearing it now lets the next action render a fresh toast.
+        cy.contains('Interview status updated', { timeout: 15000 }).should('be.visible').click({ force: true });
+        cy.contains('Interview status updated').should('not.exist');
 
         return cy.wrap(name);
     });
@@ -133,5 +167,8 @@ Cypress.Commands.add('moveCandidateByName', (name, action, reason = 'Automated t
     cy.get(c.confirmActionButton).should('not.be.disabled').click();
 
     cy.wait('@patchInterviewByName', { timeout: 30000 }).its('response.statusCode').should('eq', 200);
-    cy.contains('Interview status updated', { timeout: 15000 }).should('be.visible');
+    // Assert the success toast, then click to dismiss it (closeOnClick) so a follow-up action's
+    // identical toast isn't suppressed by react-toastify's message-id dedup.
+    cy.contains('Interview status updated', { timeout: 15000 }).should('be.visible').click({ force: true });
+    cy.contains('Interview status updated').should('not.exist');
 });
