@@ -1,18 +1,25 @@
 name: Interview Without Job Creation
-# Run title shows the environment (derived from the link's host) so runs are distinguishable.
-run-name: Interview Without Job Creation — ${{ contains(github.event.inputs.interviewLink, 'talently.ai') && 'prod' || 'dev' }}
+# Run title shows the environment so dev vs prod runs are distinguishable in the Actions list.
+run-name: Interview Without Job Creation — ${{ github.event.inputs.environment || 'dev' }}
 
-# Runs the link-driven self-answering interview. The user supplies the interview link; the spec
-# reads it via Cypress.env('interviewLink'). No company login is required — the candidate registers
-# directly through the provided link. The environment (dev/prod) is DERIVED from the link's host
-# (so the answer/interview APIs hit the matching backend) — no separate input needed.
+# Runs the link-driven self-answering interview. Pick the target environment: dev uses the dev
+# interview link, prod uses the prod interview link (the spec selects the matching link from the
+# environment). Optionally override with a specific link. No company login is required — the
+# candidate registers directly through the link.
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: 'Target environment'
+        type: choice
+        options:
+          - dev
+          - prod
+        default: dev
       interviewLink:
-        description: 'Interview Link'
+        description: 'Interivew Link'
         required: true
-        default: 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a71cd677de749d530638904'
+        default: ''
 
 concurrency:
   group: interview-wjc-${{ github.ref }}
@@ -34,32 +41,18 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Resolve link and derive environment
-        id: cfg
-        run: |
-          LINK="${{ github.event.inputs.interviewLink }}"
-          # Prod frontends live on *.talently.ai (interview.talently.ai / interview-pro.talently.ai);
-          # the dev frontend is on *.amplifyapp.com. Derive the backend environment from the host.
-          if echo "$LINK" | grep -qiE 'talently\.ai'; then
-            ENV=prod
-          else
-            ENV=dev
-          fi
-          echo "link=$LINK" >> "$GITHUB_OUTPUT"
-          echo "environment=$ENV" >> "$GITHUB_OUTPUT"
-          echo "Using link: $LINK (environment=$ENV)"
-
       - name: Run interview (without job creation)
         uses: cypress-io/github-action@v6
         with:
           browser: chrome
           # Chrome so the interview gets the fake camera/mic launch args (Electron ignores them).
           spec: cypress/e2e/interviews/interviewWithoutJobCreation.cy.js
-          # Passed to Cypress as --env, so the spec picks it up via Cypress.env('interviewLink').
-          env: interviewLink=${{ steps.cfg.outputs.link }}
+          # Optional link override → Cypress.env('interviewLink'). When blank, the spec falls back to
+          # the dev/prod link based on the environment below.
+          env: interviewLink=${{ github.event.inputs.interviewLink }}
         env:
-          # Derived from the link's host — selects the matching backend in cypress.config.js.
-          ENVIRONMENT: ${{ steps.cfg.outputs.environment }}
+          # Selects dev/prod URLs in cypress.config.js AND drives the spec's env-based link fallback.
+          ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
 
       - name: Upload failure screenshots
         if: failure()
