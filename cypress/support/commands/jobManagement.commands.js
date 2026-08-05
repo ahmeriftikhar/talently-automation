@@ -66,6 +66,45 @@ Cypress.Commands.add('reopenJob', (jobIndex = 0) => {
     });
 });
 
+// Yield the index of the first job card of type "Fixed" (standard wizard), or -1 if none.
+// Each card renders a "Fixed" / "Dynamic" type badge (job-detail-card.tsx). The edit/clone specs
+// need a Fixed job because a Dynamic job routes to /edit-dynamic-interview and uses a different
+// wizard (no Customize Questions / Coding / Interview Config tabs).
+Cypress.Commands.add('firstFixedJobIndex', () => {
+    return cy.get(selectors.jobs.jobCard).then(($cards) => {
+        let idx = -1;
+        $cards.each((i, el) => {
+            if (idx >= 0) return;
+            const isFixed = [...Cypress.$(el).find('div')].some(
+                (d) => Cypress.$(d).text().trim() === 'Fixed'
+            );
+            if (isFixed) idx = i;
+        });
+        return idx;
+    });
+});
+
+// Yield the index of the first FIXED job, paging through "Load More Jobs" if the current page has
+// none. Keeps loading more and re-scanning until a Fixed job is found or there are no more pages
+// (yields -1 in that case).
+Cypress.Commands.add('firstFixedJobIndexAcrossPages', () => {
+    const scan = () =>
+        cy.firstFixedJobIndex().then((idx) => {
+            if (idx >= 0) return idx;
+            return cy.get('body').then(($b) => {
+                const hasMore = $b.find(selectors.jobs.loadMoreButton).length > 0;
+                if (!hasMore) return -1;
+                return cy.get(selectors.jobs.jobCard).its('length').then((before) => {
+                    cy.task('logMessage', { message: 'No Fixed job on this page — clicking "Load More Jobs"', style: 'gray' });
+                    cy.get(selectors.jobs.loadMoreButton).scrollIntoView().click();
+                    cy.get(selectors.jobs.jobCard, { timeout: 30000 }).should('have.length.greaterThan', before);
+                    return scan();
+                });
+            });
+        });
+    return scan();
+});
+
 // Edit a job
 Cypress.Commands.add('editJob', (jobIndex = 0) => {
     cy.log(`Editing job at index ${jobIndex}`);
