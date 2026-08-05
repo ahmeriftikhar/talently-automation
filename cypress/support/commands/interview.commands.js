@@ -359,7 +359,8 @@ Cypress.Commands.add('waitForInterviewCompletion', (maxWait = 300000) => {
 // Main interview flow without job creation
 Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
     const currentDate = new Date().toISOString().slice(0, 10);
-    const currentTime = new Date().toISOString().slice(11, 19);
+    // Use '-' instead of ':' in the time — GitHub's upload-artifact rejects filenames with a colon.
+    const currentTime = new Date().toISOString().slice(11, 19).replace(/:/g, '-');
     const filename = `interviewReportWithoutJobCreation_${currentDate}_${currentTime}.json`;
     const filepath = `cypress/fixtures/interviewReports/${filename}`;
 
