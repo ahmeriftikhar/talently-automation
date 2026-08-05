@@ -15,9 +15,19 @@ import { selectors } from '../../support/selectors/selectors';
 describe('Job Edit & Clone Tests', () => {
     Cypress.on('uncaught:exception', () => false);
 
-    beforeEach(() => {
+    beforeEach(function () {
         cy.loginAsAutomationCompany();
         cy.navigateToJobListing();
+        // These flows require a FIXED job (Dynamic jobs use /edit-dynamic-interview and a different
+        // wizard). Pick the first Fixed card (paging through "Load More Jobs" if needed) and share
+        // its index with the tests. Skip if no Fixed job exists across all pages.
+        cy.firstFixedJobIndexAcrossPages().then((idx) => {
+            if (idx < 0) {
+                cy.task('logMessage', { message: 'No Fixed job found — skipping edit/clone tests', style: 'yellow' });
+                this.skip();
+            }
+            cy.wrap(idx).as('fixedIdx');
+        });
     });
 
     it('should open the edit-job form pre-populated with the existing job data', () => {
@@ -26,17 +36,19 @@ describe('Job Edit & Clone Tests', () => {
             style: 'blue',
         });
 
-        cy.getJobTitleByIndex(0).then((jobTitle) => {
-            // Open Edit Job from the card kebab (command asserts the /edit-job URL)
-            cy.editJob(0);
+        cy.get('@fixedIdx').then((idx) => {
+            cy.getJobTitleByIndex(idx).then((jobTitle) => {
+                // Open Edit Job from the card kebab (command asserts the /edit-job URL)
+                cy.editJob(idx);
 
-            // The job-details form should load with the title pre-filled from the source job
-            cy.get(selectors.jobs.jobTitleInput, { timeout: 15000 })
-                .should('be.visible')
-                .and('have.value', jobTitle);
+                // The job-details form should load with the title pre-filled from the source job
+                cy.get(selectors.jobs.jobTitleInput, { timeout: 15000 })
+                    .should('be.visible')
+                    .and('have.value', jobTitle);
 
-            // Wizard tabs should be present (edit page uses the "Job Details" tab)
-            cy.get(selectors.jobs.jobDetailsTab).should('be.visible');
+                // Wizard tabs should be present (edit page uses the "Job Details" tab)
+                cy.get(selectors.jobs.jobDetailsTab).should('be.visible');
+            });
         });
 
         cy.task('logMessage', {
@@ -51,7 +63,7 @@ describe('Job Edit & Clone Tests', () => {
             style: 'blue',
         });
 
-        cy.editJob(0);
+        cy.get('@fixedIdx').then((idx) => cy.editJob(idx));
 
         // Change the title locally and confirm the field reflects the new value.
         // Deliberately NOT saved — avoids mutating the real job.
@@ -74,14 +86,16 @@ describe('Job Edit & Clone Tests', () => {
             style: 'blue',
         });
 
-        cy.getJobTitleByIndex(0).then((jobTitle) => {
-            // Open Clone Job from the card kebab (command asserts the /duplicate-job URL)
-            cy.duplicateJob(0);
+        cy.get('@fixedIdx').then((idx) => {
+            cy.getJobTitleByIndex(idx).then((jobTitle) => {
+                // Open Clone Job from the card kebab (command asserts the /duplicate-job URL)
+                cy.duplicateJob(idx);
 
-            // Cloning copies the source job's data — the title input should match the source
-            cy.get(selectors.jobs.jobTitleInput, { timeout: 15000 })
-                .should('be.visible')
-                .and('have.value', jobTitle);
+                // Cloning copies the source job's data — the title input should match the source
+                cy.get(selectors.jobs.jobTitleInput, { timeout: 15000 })
+                    .should('be.visible')
+                    .and('have.value', jobTitle);
+            });
         });
 
         cy.task('logMessage', {
@@ -96,7 +110,7 @@ describe('Job Edit & Clone Tests', () => {
             style: 'blue',
         });
 
-        cy.duplicateJob(0);
+        cy.get('@fixedIdx').then((idx) => cy.duplicateJob(idx));
 
         cy.get(selectors.jobs.jobDetailsTab, { timeout: 15000 }).should('be.visible');
         cy.get(selectors.jobs.summaryTab).should('be.visible');
@@ -125,8 +139,8 @@ describe('Job Edit & Clone Tests', () => {
         cy.intercept('PATCH', `${backendBaseUrl}/job/*`).as('updateJob');
         cy.intercept('POST', `${backendBaseUrl}/job/*/publish`).as('publishJob');
 
-        // Open the edit form for the first job
-        cy.editJob(0);
+        // Open the edit form for the first Fixed job
+        cy.get('@fixedIdx').then((idx) => cy.editJob(idx));
 
         // --- Step 1: Job Details — edit the title, then Proceed (persists via PATCH) ---
         cy.get(selectors.jobs.jobTitleInput, { timeout: 15000 }).should('be.visible');
@@ -202,8 +216,8 @@ describe('Job Edit & Clone Tests', () => {
         cy.intercept('POST', `${backendBaseUrl}/create-job`).as('createJob');
         cy.intercept('POST', `${backendBaseUrl}/job/*/publish`).as('publishJob');
 
-        // Open the clone form for the first job (pre-populated from the source job)
-        cy.duplicateJob(0);
+        // Open the clone form for the first Fixed job (pre-populated from the source job)
+        cy.get('@fixedIdx').then((idx) => cy.duplicateJob(idx));
 
         // --- Step 1: Job Details — give the clone a distinct title, then Proceed (creates the job) ---
         cy.get(selectors.jobs.jobTitleInput, { timeout: 15000 }).should('be.visible');
