@@ -214,18 +214,24 @@ Cypress.Commands.add('navigateToInterviewConfiguration', (interviewTranscription
 
 Cypress.Commands.add('checkTranscriptionToggle', (interviewTranscription) => {
     cy.log('Checking transcription toggle');
-    cy.get(selectors.jobs.transcriptionToggle).then(($toggle) => {
-        const isChecked = $toggle.attr('aria-checked') === 'true';
-        if (interviewTranscription && !isChecked) {
-            cy.log('Transcription toggle is OFF, turning it ON');
-            cy.get(selectors.jobs.transcriptionToggle).click();
-        } else if (!interviewTranscription && isChecked) {
-            cy.log('Transcription toggle is ON, turning it OFF');
-            cy.get(selectors.jobs.transcriptionToggle).click();
-        } else {
-            cy.log(`Transcription toggle is already ${interviewTranscription ? 'ON' : 'OFF'}`);
-        }
-    });
+    // The Radix switch is disabled while interview-config loads (disabled={loading}); a click on a
+    // disabled switch is a no-op, leaving aria-checked stuck. Wait until it's enabled before
+    // reading state / toggling, otherwise the click is silently dropped and the assert times out.
+    cy.get(selectors.jobs.transcriptionToggle, { timeout: 20000 })
+        .should('be.visible')
+        .and('not.be.disabled')
+        .then(($toggle) => {
+            const isChecked = $toggle.attr('aria-checked') === 'true';
+            if (interviewTranscription && !isChecked) {
+                cy.log('Transcription toggle is OFF, turning it ON');
+                cy.get(selectors.jobs.transcriptionToggle).click();
+            } else if (!interviewTranscription && isChecked) {
+                cy.log('Transcription toggle is ON, turning it OFF');
+                cy.get(selectors.jobs.transcriptionToggle).click();
+            } else {
+                cy.log(`Transcription toggle is already ${interviewTranscription ? 'ON' : 'OFF'}`);
+            }
+        });
     cy.get(selectors.jobs.transcriptionToggle).should('have.attr', 'aria-checked', String(interviewTranscription));
 });
 
