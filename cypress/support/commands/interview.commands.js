@@ -307,8 +307,9 @@ Cypress.Commands.add('sendAnswer', (sid, answer, callId, userId, userName, inter
 // Check if interview is completed
 Cypress.Commands.add('isInterviewCompleted', () => {
     return cy.url().then((url) => {
-        const isOnFeedbackPage = url.includes('feedback');
-        if (isOnFeedbackPage) {
+        // Completion redirects to /interview-complete/<id> (older builds used /feedback) — accept both.
+        const isOnCompletionPage = url.includes('feedback') || url.includes('interview-complete');
+        if (isOnCompletionPage) {
             return true;
         }
 
@@ -341,7 +342,7 @@ Cypress.Commands.add('waitForInterviewCompletion', (maxWait = 300000) => {
     const waitForCompletion = (elapsed) =>
         cy.url({ log: false }).then((url) =>
             cy.get('body', { log: false }).then(($body) => {
-                if (url.includes('feedback') || completionRegex.test($body.text())) {
+                if (url.includes('feedback') || url.includes('interview-complete') || completionRegex.test($body.text())) {
                     cy.task('logMessage', { message: 'Interview completed successfully', style: 'green' });
                     return;
                 }
@@ -479,13 +480,17 @@ Cypress.Commands.add('interviewWithoutJobCreation', (interviewLink) => {
                                         cy.writeFile(filepath, data);
                                     });
 
-                                    // Wait for redirect to feedback page
-                                    cy.url({ timeout: 30000 }).should('include', 'feedback').then(() => {
-                                        cy.task('logMessage', {
-                                            message: 'Successfully redirected to feedback page',
-                                            style: 'green',
+                                    // Wait for redirect to the completion page. Candidate interviews
+                                    // land on /interview-complete/<id>?callId=... (older builds used
+                                    // /feedback) — accept either so the redirect check doesn't fail.
+                                    cy.url({ timeout: 30000 })
+                                        .should('match', /feedback|interview-complete/)
+                                        .then((completionUrl) => {
+                                            cy.task('logMessage', {
+                                                message: `Redirected to completion page: ${completionUrl}`,
+                                                style: 'green',
+                                            });
                                         });
-                                    });
                                     return;
                                 }
 
