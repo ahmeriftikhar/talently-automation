@@ -313,9 +313,11 @@ Cypress.Commands.add('isInterviewCompleted', () => {
         }
 
         return cy.get('body').then(($body) => {
-            const html = $body.html();
-            const hasCompletionMessage = html.includes(selectors.interview.completedMessage);
-            return hasCompletionMessage;
+            // Match completion the SAME (case-insensitive) way getQuestionFromBot detects it, so this
+            // top-of-loop check catches the final message and stops BEFORE the loop reads it as a
+            // question. A case-sensitive includes() missed lowercase/embedded variants, so the loop
+            // fell through to getQuestionFromBot and tried to answer the completion message.
+            return /interview\s+is\s+completed/i.test($body.text());
         });
     });
 });
