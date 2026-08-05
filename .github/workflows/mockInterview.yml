@@ -1,4 +1,6 @@
 name: Mock Interview
+# Run title shows the environment so dev vs prod runs are distinguishable in the Actions list.
+run-name: Mock Interview — ${{ github.event.inputs.environment || 'dev' }}
 
 # Runs the mock-interview spec (setup + validations + full default & custom interview completions).
 # The custom-interview fields (title / description / duration) are overridable — the spec reads them

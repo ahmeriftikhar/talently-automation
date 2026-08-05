@@ -1,4 +1,6 @@
 name: Interview Journey
+# Run title shows the interview type + environment so runs are distinguishable in the Actions list.
+run-name: Interview Journey — ${{ github.event.inputs.interviewType }} on ${{ github.event.inputs.environment || 'dev' }}
 
 # End-to-end interview journey for a FIXED or DYNAMIC job in a single workflow:
 #   log in as company -> create the job (fixed or dynamic, no coding) -> publish ->

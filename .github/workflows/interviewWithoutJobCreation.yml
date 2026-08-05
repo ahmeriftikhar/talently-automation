@@ -1,4 +1,6 @@
 name: Interview Without Job Creation
+# Run title shows the environment (derived from the link's host) so runs are distinguishable.
+run-name: Interview Without Job Creation — ${{ contains(github.event.inputs.interviewLink, 'talently.ai') && 'prod' || 'dev' }}
 
 # Runs the link-driven self-answering interview. The user supplies the interview link; the spec
 # reads it via Cypress.env('interviewLink'). No company login is required — the candidate registers

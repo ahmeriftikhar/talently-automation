@@ -1,4 +1,6 @@
 name: Regression Testing
+# Run title shows the environment so dev vs prod runs are distinguishable in the Actions list.
+run-name: Regression Testing — ${{ github.event.inputs.environment || 'dev' }}
 
 # Runs the regression suite: auth, candidates, create-jobs, dashboard, jobs, and the
 # link-driven interview (interviewWithoutJobCreation). The Talently Pro interview and the

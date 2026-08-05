@@ -1,4 +1,6 @@
 name: Parallel Interview Sessions
+# Run title shows the session count + environment (derived from the link's host) so runs are distinguishable.
+run-name: Parallel Interviews x${{ github.event.inputs.parallelCount }} — ${{ contains(github.event.inputs.interviewLink, 'talently.ai') && 'prod' || 'dev' }}
 
 # Runs the link-driven self-answering interview N times IN PARALLEL against the same link.
 # Each session is a separate matrix job that registers its own (faker) candidate, so N sessions
