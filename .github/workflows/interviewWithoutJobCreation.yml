@@ -2,23 +2,32 @@ name: Interview Without Job Creation
 # Run title shows the environment so dev vs prod runs are distinguishable in the Actions list.
 run-name: Interview Without Job Creation — ${{ github.event.inputs.environment || 'dev' }}
 
-# Runs the link-driven self-answering interview. Pick the target environment: dev uses the dev
-# interview link, prod uses the prod interview link (the spec selects the matching link from the
-# environment). Optionally override with a specific link. No company login is required — the
-# candidate registers directly through the link.
+# Runs the link-driven self-answering interview. Choose the Target Environment and a preset link
+# (both presets are always listed), or paste a Custom interview link that overrides the preset.
+# The effective link must match the environment (dev = amplifyapp.com, prod = talently.ai) — if it
+# doesn't, the run fails fast with a mismatch error. (GitHub dispatch forms are static, so the
+# preset dropdown can't auto-change when you switch environment — the mismatch check enforces it.)
+# No company login is required; the candidate registers directly through the link.
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment'
+        description: 'Target Environment (must match the link)'
         type: choice
         options:
           - dev
           - prod
         default: dev
       interviewLink:
-        description: 'Interivew Link'
-        required: true
+        description: 'Interview link — dev, prod (ignored if a custom link is set below)'
+        type: choice
+        options:
+          - 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a71cd677de749d530638904'
+          - 'https://interview.talently.ai/interview/6a71cdffe2455fe5966ea4c3'
+        default: 'https://develop.d2n5cdf1ckgvym.amplifyapp.com/interview/6a71cd677de749d530638904'
+      customLink:
+        description: 'Optional custom interview link — overrides the dropdown when provided (must still match the environment)'
+        required: false
         default: ''
 
 concurrency:
@@ -41,17 +50,51 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Resolve and validate interview link
+        id: cfg
+        run: |
+          ENV="${{ github.event.inputs.environment }}"
+          PRESET="${{ github.event.inputs.interviewLink }}"
+          CUSTOM="${{ github.event.inputs.customLink }}"
+          # A custom link (when provided) overrides the preset dropdown.
+          if [ -n "$CUSTOM" ]; then LINK="$CUSTOM"; SOURCE="custom"; else LINK="$PRESET"; SOURCE="preset dropdown"; fi
+
+          # The effective link must match the environment. Prod links live on talently.ai; anything
+          # else (amplifyapp.com, a custom dev host, etc.) is treated as dev. This catches both:
+          # changing the environment without changing the link, and adding a custom link that
+          # doesn't match the selected environment.
+          if [ "$ENV" = "prod" ] && ! echo "$LINK" | grep -qiE 'talently\.ai'; then
+            echo "::error::Environment is 'prod' but the interview link is not a prod (talently.ai) link: $LINK. Change the link (or the environment) so they match."
+            exit 1
+          fi
+          if [ "$ENV" = "dev" ] && echo "$LINK" | grep -qiE 'talently\.ai'; then
+            echo "::error::Environment is 'dev' but the interview link is a prod (talently.ai) link: $LINK. Change the link (or the environment) so they match."
+            exit 1
+          fi
+
+          echo "link=$LINK" >> "$GITHUB_OUTPUT"
+          echo "OK: environment '$ENV' matches link $LINK"
+
+          # Show the actually-used link on the run's Summary page so there's no ambiguity about
+          # which link (preset vs custom) a run used.
+          {
+            echo "### Interview run configuration"
+            echo ""
+            echo "- **Environment:** \`$ENV\`"
+            echo "- **Link source:** $SOURCE"
+            echo "- **Interview link used:** $LINK"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Run interview (without job creation)
         uses: cypress-io/github-action@v6
         with:
           browser: chrome
           # Chrome so the interview gets the fake camera/mic launch args (Electron ignores them).
           spec: cypress/e2e/interviews/interviewWithoutJobCreation.cy.js
-          # Optional link override → Cypress.env('interviewLink'). When blank, the spec falls back to
-          # the dev/prod link based on the environment below.
-          env: interviewLink=${{ github.event.inputs.interviewLink }}
+          # The resolved link (custom override or preset) → Cypress.env('interviewLink').
+          env: interviewLink=${{ steps.cfg.outputs.link }}
         env:
-          # Selects dev/prod URLs in cypress.config.js AND drives the spec's env-based link fallback.
+          # Selects dev/prod URLs in cypress.config.js.
           ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
 
       - name: Upload failure screenshots
