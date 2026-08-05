@@ -72,4 +72,11 @@ Cypress.Commands.add('loginAsAutomationCompany', () => {
 
     // Wait for navigation after login
     cy.url().should('not.include', '/login');
+
+    // Switch to the workspace configured in cypress.env(.prod).json before any test runs.
+    // Guarded so login still works if no workspace is configured.
+    const workspaceName = Cypress.env('workspaceName');
+    if (workspaceName) {
+        cy.switchWorkspace(workspaceName);
+    }
 });

@@ -29,8 +29,12 @@ export const selectors = {
         statCards: '.bg-white.rounded-lg',
     },
     workspace: {
-        switcher: '[data-cy="workspace-switcher"]',
-        option: (name) => `[data-cy="workspace-option-${name}"]`,
+        // HeaderAvatar dropdown (components/HeaderAvatar) — present in the top Header on authed pages.
+        // Its trigger button carries aria-label directly (the job-card kebab has it on a <span>, so a
+        // button[aria-label] selector uniquely targets the avatar). Workspaces render as menu items
+        // listing each workspace name; the current one is disabled.
+        switcherTrigger: 'button[aria-label="Customise options"]',
+        menuItem: '[role="menuitem"]',
     },
     jobs: {
         // --- Add-job entry (create-job-listing/job-listing-header.tsx) ---
