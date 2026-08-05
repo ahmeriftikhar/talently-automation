@@ -123,24 +123,38 @@ describe('Job Management Tests', () => {
             style: 'blue',
         });
 
-        // First archive a job
-        cy.getJobTitleByIndex(0).then((jobTitle) => {
-            cy.archiveJob(0);
+        const countOf = ($t) => parseInt($t.text().replace(/\D/g, ''), 10);
 
-            // Verify it's in Archive tab
-            cy.switchJobTab('Archive');
-            cy.contains(jobTitle).should('be.visible');
+        // Titles are NOT unique (other specs create jobs with repeating titles), so verifying by
+        // "title disappears from Archive" is unreliable — another archived job with the same title
+        // can remain. Verify via the ACTIVE tab TOTAL instead: archiving drops it by one and
+        // reopening restores it. (The Archive badge count doesn't refetch in place after a reopen
+        // while you stay on the Archive tab, so we don't rely on it.)
 
-            // Reopen the job
-            cy.reopenJob(0);
+        // Ensure there's an archived job to reopen: archive one first and capture the active total.
+        cy.get(selectors.jobs.activeTab)
+            .should(($t) => expect(countOf($t)).to.be.greaterThan(0))
+            .invoke('text')
+            .then((text) => {
+                const activeCountBefore = parseInt(text.replace(/\D/g, ''), 10);
 
-            // Verify job is no longer in Archive tab
-            cy.contains(jobTitle).should('not.exist');
+                cy.archiveJob(0);
 
-            // Verify job is back in Active tab
-            cy.switchJobTab('Active');
-            cy.contains(jobTitle, { timeout: 10000 }).should('be.visible');
-        });
+                // Active total should drop by one after archiving (retries until refetch settles).
+                cy.get(selectors.jobs.activeTab, { timeout: 15000 }).should(($t) => {
+                    expect(countOf($t), 'active job count after archive').to.be.lessThan(activeCountBefore);
+                });
+
+                // Reopen the first archived job.
+                cy.switchJobTab('Archive');
+                cy.reopenJob(0);
+
+                // Active total should climb back to where it started (retries until refetch settles).
+                cy.switchJobTab('Active');
+                cy.get(selectors.jobs.activeTab, { timeout: 15000 }).should(($t) => {
+                    expect(countOf($t), 'active job count after reopen').to.eq(activeCountBefore);
+                });
+            });
 
         cy.task('logMessage', {
             message: 'Job reopened and moved back to Active tab successfully',
@@ -154,8 +168,12 @@ describe('Job Management Tests', () => {
             style: 'blue',
         });
 
-        // Navigate to edit page
-        cy.editJob(0);
+        // A Dynamic job routes to /edit-dynamic-interview, so target the first FIXED job
+        // (paging through "Load More Jobs" if needed) to reliably assert the /edit-job route.
+        cy.firstFixedJobIndexAcrossPages().then((idx) => {
+            expect(idx, 'a Fixed job exists to edit').to.be.greaterThan(-1);
+            cy.editJob(idx);
+        });
 
         // Verify we're on edit page
         cy.url().should('include', '/edit-job');
@@ -176,8 +194,12 @@ describe('Job Management Tests', () => {
             style: 'blue',
         });
 
-        // Navigate to duplicate page
-        cy.duplicateJob(0);
+        // A Dynamic job routes to /duplicate-dynamic-interview, so target the first FIXED job
+        // (paging through "Load More Jobs" if needed) to reliably assert the /duplicate-job route.
+        cy.firstFixedJobIndexAcrossPages().then((idx) => {
+            expect(idx, 'a Fixed job exists to duplicate').to.be.greaterThan(-1);
+            cy.duplicateJob(idx);
+        });
 
         // Verify we're on duplicate page
         cy.url().should('include', '/duplicate-job');
