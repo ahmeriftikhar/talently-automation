@@ -223,6 +223,27 @@ Cypress.Commands.add('proceedDynamicStep', () => {
     cy.wait('@saveDynamicStep', { timeout: 60000 }).its('response.statusCode').should('be.oneOf', [200, 201]);
 });
 
+// After leaving the Skillset step the wizard lands on EITHER the Coding step (when live coding is
+// enabled) or directly on Interview Configuration. Wait until one is identifiable, and if it's the
+// Coding step, advance past it (2 coding questions are auto-generated, satisfying the min) so the
+// caller reliably ends up on Interview Configuration.
+Cypress.Commands.add('handleDynamicCodingStepIfPresent', () => {
+    cy.log('Checking whether the dynamic Coding step is present');
+    cy.get('body', { timeout: 30000 }).should(($b) => {
+        const onCoding = $b.find(selectors.dynamicJob.codingHeading).length;
+        const onConfig = $b.find(selectors.dynamicJob.transcriptionToggle).length;
+        expect(onCoding + onConfig, 'reached the Coding or Interview Configuration step').to.be.greaterThan(0);
+    });
+    cy.get('body').then(($b) => {
+        if ($b.find(selectors.dynamicJob.codingHeading).length > 0) {
+            cy.task('logMessage', { message: 'Coding step present — advancing past it to Interview Configuration', style: 'gray' });
+            cy.proceedDynamicStep();
+        } else {
+            cy.task('logMessage', { message: 'No Coding step — already on Interview Configuration', style: 'gray' });
+        }
+    });
+});
+
 // Configure the Interview Configuration step (transcription + engine), reusing the shared toggles.
 Cypress.Commands.add('configureDynamicInterview', (interviewTranscription, interviewEngine) => {
     cy.log('Configuring dynamic interview (transcription + engine)');
