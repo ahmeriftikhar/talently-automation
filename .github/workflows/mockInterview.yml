@@ -34,7 +34,9 @@ on:
         default: '10'
 
 concurrency:
-  group: mock-interview-${{ github.ref }}
+  # run_id makes the group unique per run, so concurrent runs never cancel/supersede each other
+  # (they queue if the job limit is hit instead of being cancelled).
+  group: mock-interview-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:

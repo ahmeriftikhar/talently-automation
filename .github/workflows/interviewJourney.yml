@@ -43,7 +43,9 @@ on:
 
 concurrency:
   # These publish REAL jobs and run a full interview — never cancel a run mid-flight.
-  group: interview-journey-${{ github.ref }}
+  # run_id makes the group unique per run, so concurrent runs never cancel/supersede each other
+  # (they queue if the job limit is hit instead of being cancelled).
+  group: interview-journey-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:

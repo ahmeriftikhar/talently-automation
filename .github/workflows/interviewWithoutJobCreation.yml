@@ -31,7 +31,9 @@ on:
         default: ''
 
 concurrency:
-  group: interview-wjc-${{ github.ref }}
+  # run_id makes the group unique per run, so concurrent runs never cancel/supersede each other
+  # (they queue if the job limit is hit instead of being cancelled).
+  group: interview-wjc-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
 
 jobs:
