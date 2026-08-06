@@ -14,80 +14,81 @@ describe('Candidate Actions Tests', () => {
     it('should display candidate scores on the applied-candidates page', () => {
         cy.task('logMessage', { message: 'Test Case: candidate scores are displayed', style: 'blue' });
 
-        cy.openAppliedCandidatesForJobWithCandidates();
+        // Finds a job that actually has a candidate with a completed (scored) report, searching
+        // across jobs so a job whose reports are all "Processing" doesn't fail the test.
+        cy.openJobWithScoredCandidate();
 
-        // The Score column always renders as a header
-        cy.get(c.headerScore, { timeout: 15000 }).should('be.visible');
-
-        cy.candidateRowCount().then((count) => {
-            if (count === 0) {
-                cy.task('logMessage', { message: 'First job has no applied candidates — skipping score assertion', style: 'yellow' });
+        cy.get('@scoredJob').then((res) => {
+            if (!res.found) {
+                cy.task('logMessage', { message: 'No job in the workspace has a scored candidate yet — skipping score assertion', style: 'yellow' });
                 return;
             }
-            // Score is an SVG <text> reading "N%". Rows still being scored show "Processing" (no % text).
-            // If NO report is completed yet, skip gracefully instead of failing — it's a timing condition.
+
+            // The Score column always renders as a header
+            cy.get(c.headerScore, { timeout: 15000 }).should('be.visible');
+
+            // Score is an SVG <text> reading "N%". At least one is present (that's how the job was chosen).
             cy.get('body').then(($b) => {
                 const scores = [...$b.find(c.scoreText)].map((el) => (el.textContent || '').trim());
                 const scored = scores.filter((s) => /%$/.test(s));
-                if (scored.length === 0) {
-                    cy.task('logMessage', { message: 'No candidate report is scored yet (all Processing) — skipping score assertion', style: 'yellow' });
-                    return;
-                }
                 cy.task('logMessage', { message: `Scores displayed: ${scored.join(', ')}`, style: 'gray' });
                 expect(scored.length, 'at least one candidate shows a % score').to.be.greaterThan(0);
             });
-        });
 
-        cy.task('logMessage', { message: 'Candidate scores displayed correctly', style: 'green' });
+            cy.task('logMessage', { message: 'Candidate scores displayed correctly', style: 'green' });
+        });
     });
 
     it('should shortlist and reject a candidate, verifying each stage move', () => {
         cy.task('logMessage', { message: 'Test Case: shortlist then reject a candidate, verifying moves', style: 'blue' });
 
-        cy.openAppliedCandidatesForJobWithCandidates();
+        // Finds a job that has a scored AND unlocked candidate in the Applied stage, searching
+        // across ALL jobs — so a job whose reports are all "Processing" (or whose scored candidates
+        // are locked) doesn't force a skip; it moves on to the next job. Only skips if no job in the
+        // workspace has an actionable candidate.
+        cy.openJobWithScoredCandidate({ requireActionable: true });
 
-        // Work from the Applied stage so we can move a candidate out and back for each action.
-        cy.selectCandidateStage('Applied');
-
-        cy.candidateRowCount().then((count) => {
-            if (count === 0) {
-                cy.task('logMessage', { message: 'No candidates in Applied stage — skipping move test', style: 'yellow' });
+        cy.get('@scoredJob').then((res) => {
+            if (!res.found) {
+                cy.task('logMessage', { message: 'No job in the workspace has a scored & unlocked candidate — skipping move test', style: 'yellow' });
                 return;
             }
 
-            // Find a candidate whose report is scored AND unlocked (kebab enabled). If none are
-            // actionable (e.g. all reports still Processing), skip — actions are inert on such rows.
+            // The command already left us on the Applied stage with an actionable candidate; re-find
+            // the index against the current DOM (guards against any late re-render).
+            cy.selectCandidateStage('Applied');
             cy.firstActionableCandidateIndex().then((idx) => {
                 if (idx < 0) {
-                    cy.task('logMessage', { message: 'No scored/unlocked candidate available (reports still processing or locked) — skipping move test', style: 'yellow' });
+                    cy.task('logMessage', { message: 'Actionable candidate no longer present after refetch — skipping move test', style: 'yellow' });
                     return;
                 }
 
+                // Each move is verified by presence in the DESTINATION stage: switching the stage
+                // chip forces a fresh /candidates fetch, so we see the real post-move state (the
+                // source list doesn't always refetch in place after a move, which made asserting
+                // "absent from the old stage" flaky). Presence in the new stage proves the move.
+
                 // --- Shortlist ---
                 cy.moveCandidateAtIndex(idx, 'shortlist', 'Strong interview — shortlisting (automated test).').then((name) => {
-                cy.get('table tbody', { timeout: 15000 }).should('not.contain', name);
                 cy.selectCandidateStage('Shortlisted');
-                cy.get('table tbody', { timeout: 15000 }).should('contain', name);
+                cy.assertCandidateInList(name);
                 cy.task('logMessage', { message: `Candidate "${name}" moved to Shortlisted successfully`, style: 'green' });
 
                 // Restore to Applied before the next action
                 cy.moveCandidateByName(name, 'reconsider', 'Reverting automated test shortlist.');
-                cy.get('table tbody', { timeout: 15000 }).should('not.contain', name);
                 cy.selectCandidateStage('Applied');
-                cy.get('table tbody', { timeout: 15000 }).should('contain', name);
+                cy.assertCandidateInList(name);
 
                 // --- Reject (same candidate) ---
                 cy.moveCandidateByName(name, 'reject', 'Not a fit for this role (automated test).');
-                cy.get('table tbody', { timeout: 15000 }).should('not.contain', name);
                 cy.selectCandidateStage('Rejected');
-                cy.get('table tbody', { timeout: 15000 }).should('contain', name);
+                cy.assertCandidateInList(name);
                 cy.task('logMessage', { message: `Candidate "${name}" moved to Rejected successfully`, style: 'green' });
 
                 // Restore original state — move the candidate back to Applied
                 cy.moveCandidateByName(name, 'reconsider', 'Reverting automated test rejection.');
-                cy.get('table tbody', { timeout: 15000 }).should('not.contain', name);
                 cy.selectCandidateStage('Applied');
-                cy.get('table tbody', { timeout: 15000 }).should('contain', name);
+                cy.assertCandidateInList(name);
                     cy.task('logMessage', { message: `Candidate "${name}" restored to Applied`, style: 'green' });
                 });
             });

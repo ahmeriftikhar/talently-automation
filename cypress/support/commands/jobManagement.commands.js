@@ -117,11 +117,12 @@ Cypress.Commands.add('firstFixedJobIndexAcrossPages', () => {
         cy.firstFixedJobIndex().then((idx) => {
             if (idx >= 0) return idx;
             return cy.get('body').then(($b) => {
-                const hasMore = $b.find(selectors.jobs.loadMoreButton).length > 0;
+                // End-of-list button stays in the DOM but disabled — treat only an ENABLED one as more pages.
+                const hasMore = $b.find(selectors.jobs.loadMoreButton).not(':disabled').length > 0;
                 if (!hasMore) return -1;
                 return cy.get(selectors.jobs.jobCard).its('length').then((before) => {
                     cy.task('logMessage', { message: 'No Fixed job on this page — clicking "Load More Jobs"', style: 'gray' });
-                    cy.get(selectors.jobs.loadMoreButton).scrollIntoView().click();
+                    cy.get(selectors.jobs.loadMoreButton).scrollIntoView().should('not.be.disabled').click();
                     cy.get(selectors.jobs.jobCard, { timeout: 30000 }).should('have.length.greaterThan', before);
                     return scan();
                 });
