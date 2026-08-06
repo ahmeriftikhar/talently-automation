@@ -214,25 +214,32 @@ Cypress.Commands.add('navigateToInterviewConfiguration', (interviewTranscription
 
 Cypress.Commands.add('checkTranscriptionToggle', (interviewTranscription) => {
     cy.log('Checking transcription toggle');
+    // This step has MULTIPLE Radix switches (Enable Interview Transcript, Company Introduction), so
+    // a bare button[role="switch"] is ambiguous. Scope to the transcription switch via its
+    // "Enable Interview Transcript" label: the closest ancestor of that label which contains a
+    // switch holds ONLY the transcription switch.
+    const transcriptionSwitch = () =>
+        cy.contains('Enable Interview Transcript', { timeout: 20000 })
+            .parents('div')
+            .filter(':has(button[role="switch"])')
+            .first()
+            .find('button[role="switch"]');
+
     // The Radix switch is disabled while interview-config loads (disabled={loading}); a click on a
-    // disabled switch is a no-op, leaving aria-checked stuck. Wait until it's enabled before
-    // reading state / toggling, otherwise the click is silently dropped and the assert times out.
-    cy.get(selectors.jobs.transcriptionToggle, { timeout: 20000 })
+    // disabled switch is a no-op, so wait until it's enabled before reading/toggling.
+    transcriptionSwitch()
         .should('be.visible')
         .and('not.be.disabled')
         .then(($toggle) => {
             const isChecked = $toggle.attr('aria-checked') === 'true';
-            if (interviewTranscription && !isChecked) {
-                cy.log('Transcription toggle is OFF, turning it ON');
-                cy.get(selectors.jobs.transcriptionToggle).click();
-            } else if (!interviewTranscription && isChecked) {
-                cy.log('Transcription toggle is ON, turning it OFF');
-                cy.get(selectors.jobs.transcriptionToggle).click();
+            if (interviewTranscription !== isChecked) {
+                cy.log(`Transcription toggle is ${isChecked ? 'ON' : 'OFF'}, turning it ${interviewTranscription ? 'ON' : 'OFF'}`);
+                cy.wrap($toggle).click();
             } else {
                 cy.log(`Transcription toggle is already ${interviewTranscription ? 'ON' : 'OFF'}`);
             }
         });
-    cy.get(selectors.jobs.transcriptionToggle).should('have.attr', 'aria-checked', String(interviewTranscription));
+    transcriptionSwitch().should('have.attr', 'aria-checked', String(interviewTranscription));
 });
 
 Cypress.Commands.add('selectInterviewEngine', (engine) => {
