@@ -6,7 +6,15 @@ const backendUrl = () => Cypress.env('backendBaseUrl') || Cypress.config('baseSe
 Cypress.Commands.add('openDynamicJobCreation', () => {
     cy.log('Opening dynamic job creation');
     cy.visit('/create-job');
-    cy.get(selectors.jobs.addJobButton, { timeout: 15000 }).click();
+    // Wait for the listing page to finish loading before interacting — the first run (right after
+    // the workspace switch, cold cache) can take a while to render the header. The "Add Job" header
+    // button is normally present; an EMPTY workspace instead shows a "Create and add a new Job"
+    // button. Accept whichever is visible — both open the same "Create a New Job" chooser modal.
+    cy.document({ timeout: 30000 }).its('readyState').should('eq', 'complete');
+    cy.get(`${selectors.jobs.addJobButton}, ${selectors.jobs.createJobEmptyStateButton}`, { timeout: 30000 })
+        .filter(':visible')
+        .first()
+        .click();
     // Chooser modal — pick the "Dynamic questions" card (routes to /dynamic-interview)
     cy.get(selectors.dynamicJob.dynamicQuestionsOption, { timeout: 10000 }).click();
     cy.url({ timeout: 15000 }).should('include', '/dynamic-interview');

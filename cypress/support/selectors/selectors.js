@@ -39,6 +39,9 @@ export const selectors = {
     jobs: {
         // --- Add-job entry (create-job-listing/job-listing-header.tsx) ---
         addJobButton: '#click-add-job',
+        // Empty-workspace state (create-job-listing/no-job-post.tsx) shows a different CTA that opens
+        // the same "Create a New Job" chooser modal.
+        createJobEmptyStateButton: '#click-create-a-new-job',
         // Create-a-New-Job chooser modal cards (dynamic-interview/create-job-option-modal.tsx) — select by text
         fixedQuestionsOption: ':contains("Fixed questions")',
         dynamicQuestionsOption: ':contains("Dynamic questions")',
