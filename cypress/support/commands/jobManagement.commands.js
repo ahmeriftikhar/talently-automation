@@ -55,8 +55,33 @@ Cypress.Commands.add('archiveJob', (jobIndex = 0) => {
 // Reopen/Unarchive a job
 Cypress.Commands.add('reopenJob', (jobIndex = 0) => {
     cy.log(`Reopening job at index ${jobIndex}`);
-    cy.openJobDropdown(jobIndex);
-    cy.get(selectors.jobs.activeOption, { timeout: 5000 }).click();
+
+    // Wait for the (archive) list to render before interacting — opening the kebab during the
+    // tab-transition (while the archive GET is still in flight) can open the menu on a stale
+    // Active-tab card, or the menu closes when the archive list re-renders on fetch. The reopen
+    // item ("Active Job") is present but `hidden` for non-archived cards, so we retry opening the
+    // kebab until the VISIBLE reopen option appears on an actually-archived card.
+    cy.get(selectors.jobs.jobCard, { timeout: 30000 }).should('have.length.greaterThan', jobIndex);
+    cy.get(selectors.jobs.jobDropdownTrigger, { timeout: 15000 }).should('have.length.greaterThan', jobIndex);
+
+    const openAndClickReopen = (attempt = 0) => {
+        cy.openJobDropdown(jobIndex);
+        cy.get('body').then(($b) => {
+            const $opt = $b.find(selectors.jobs.activeOption).filter(':visible');
+            if ($opt.length) {
+                cy.wrap($opt.first()).click();
+            } else if (attempt < 3) {
+                cy.log(`Reopen option not visible yet — retrying (attempt ${attempt + 1})`);
+                cy.get('body').type('{esc}'); // close the menu and retry after the list settles
+                cy.get(selectors.jobs.jobCard, { timeout: 15000 }).should('have.length.greaterThan', jobIndex);
+                openAndClickReopen(attempt + 1);
+            } else {
+                throw new Error('Reopen ("Active Job") option not available on the archived job dropdown');
+            }
+        });
+    };
+    openAndClickReopen();
+
     cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('be.visible');
     cy.get(selectors.jobs.switchStatusConfirmButton).click();
     cy.get(selectors.jobs.switchStatusModal, { timeout: 5000 }).should('not.exist');
