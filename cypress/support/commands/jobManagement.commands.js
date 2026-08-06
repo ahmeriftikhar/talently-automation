@@ -7,8 +7,10 @@ Cypress.Commands.add('navigateToJobListing', () => {
     cy.log('Navigating to job listing page');
     cy.visit(selectors.jobs.jobListingPage);
     cy.url().should('include', '/create-job');
-    cy.get(selectors.jobs.activeTab, { timeout: 10000 }).should('be.visible');
-    // First redirect to /create-job is slow: the tab renders before the jobs fetch resolves.
+    // First redirect to /create-job can be slow (cold load / workspace switch), so give the tab
+    // generous time to render — a short timeout here fails the whole flow before the waits below run.
+    cy.get(selectors.jobs.activeTab, { timeout: 30000 }).should('be.visible');
+    // The tab renders before the jobs fetch resolves.
     // Wait (generously) for the Active count to populate (> 0) and the cards to actually render,
     // so downstream commands don't race an empty list. Assertions retry until the fetch settles.
     cy.get(selectors.jobs.activeTab, { timeout: 30000 })
