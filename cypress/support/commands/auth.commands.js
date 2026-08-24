@@ -12,7 +12,9 @@ Cypress.Commands.add('handleCookieConsent', ({ timeout = 15000, interval = 500 }
         return cy.get('body', { log: false }).then(($body) => {
             if ($body.find(acceptBtn).length > 0) {
                 cy.log('Cookie consent modal detected - accepting all cookies');
-                cy.get(acceptBtn, { timeout: interval }).click({ force: true });
+                // The consent UI can render more than one "Accept All" (responsive/duplicate
+                // variants); cy.click() rejects a multi-element subject, so wrap just the first match.
+                cy.wrap($body.find(acceptBtn).first()).click({ force: true });
                 // Ensure it is actually gone before proceeding, so it cannot overlay the login form.
                 return cy
                     .get('body', { log: false })

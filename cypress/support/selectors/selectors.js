@@ -249,7 +249,11 @@ export const selectors = {
         emailInput: '[data-cy="candidate-email-input"], [placeholder="Email"], [placeholder="Enter email"]',
         countrySelect: '[data-cy="candidate-country-select"], button[role="combobox"]',
         phoneInput: '[data-cy="candidate-phone-input"], [placeholder="Phone number"], [placeholder="Enter phone number"]',
-        termsCheckbox: '[data-cy="candidate-terms-checkbox"], [type="checkbox"]',
+        // The Terms checkbox has no id/data-cy — it's the checkbox inside the div that also holds
+        // the "Please agree to our … Terms of Service" text. Scope to that div so we don't also hit
+        // the newer "I'd prefer a person to review and score my interview" checkbox (ticking that
+        // would switch the interview to human review instead of AI self-scoring).
+        termsCheckbox: 'div:has(> p:contains("Please agree to our")) > input[type="checkbox"]',
         proceedButton: '#proceed-interview-click-candidate, button:contains("Proceed")',
         devicesChecked: '#devices_checked',
         joinNowButton: '#join-now-interview',
